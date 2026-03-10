@@ -123,6 +123,7 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 | Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
 | UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
 | GPS system time | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS` | Generation timestamp |
+| Location | `NRF_MODEM_GNSS_AGNSS_LOCATION` | Optional `-l LAT,LON` hint |
 
 ## Tests
 
@@ -165,14 +166,9 @@ Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
 
 ## Limitations
 
-### No reference position
+### No integrity data
 
-The nRF modem also benefits from:
-
-- Reference position (`NRF_MODEM_GNSS_AGNSS_LOCATION`) — not
-  provided. A rough hardcoded position could be added to further reduce
-  TTFF.
-- Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) — TBD ?
+Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) is not provided yet.
 
 ### Compile-time data only
 

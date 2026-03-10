@@ -155,6 +155,48 @@ static void convert_system_time(const struct gps_assist_data *data,
 	dst->sv_mask     = 0;  /* no per-SV TOW data */
 }
 
+/*
+ * Convert approximate location to nRF modem format.
+ * latitude:  coded N = (2^23 / 90) * degrees
+ * longitude: coded N = (2^24 / 360) * degrees
+ */
+static void convert_location(const struct gps_location *src,
+			     struct nrf_modem_gnss_agnss_data_location *dst)
+{
+	memset(dst, 0, sizeof(*dst));
+
+	if (!src->valid) {
+		dst->unc_semimajor = 255;
+		dst->unc_semiminor = 255;
+		dst->unc_altitude  = 255;
+		return;
+	}
+
+	dst->latitude  = (int32_t)round(src->latitude * (double)(1 << 23) / 90.0);
+	dst->longitude = (int32_t)round(src->longitude * (double)(1 << 24) / 360.0);
+	dst->altitude  = src->altitude;
+
+	/*
+	 * Uncertainty: r = 10 * ((1.1)^K - 1) meters.
+	 * K=18 gives ~55.6 km radius — good enough for a city-level hint.
+	 * K=0 means 0 m uncertainty (exact).
+	 */
+	dst->unc_semimajor = 18;
+	dst->unc_semiminor = 18;
+	dst->unc_altitude  = 255;  /* altitude uncertainty unknown */
+	dst->confidence    = 68;   /* ~1 sigma */
+}
+
+int gps_assist_inject_location(const struct gps_assist_data *data)
+{
+	struct nrf_modem_gnss_agnss_data_location loc;
+
+	convert_location(&data->location, &loc);
+	return (int)nrf_modem_gnss_agnss_write(
+		&loc, sizeof(loc),
+		NRF_MODEM_GNSS_AGNSS_LOCATION);
+}
+
 int gps_assist_inject(const struct gps_assist_data *data)
 {
 	int err;
@@ -200,6 +242,18 @@ int gps_assist_inject(const struct gps_assist_data *data)
 		NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
 	if (err)
 		return err;
+
+	/* Inject location if valid */
+	if (data->location.valid) {
+		struct nrf_modem_gnss_agnss_data_location loc;
+
+		convert_location(&data->location, &loc);
+		err = (int)nrf_modem_gnss_agnss_write(
+			&loc, sizeof(loc),
+			NRF_MODEM_GNSS_AGNSS_LOCATION);
+		if (err)
+			return err;
+	}
 
 	return 0;
 }

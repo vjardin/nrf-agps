@@ -12,10 +12,15 @@
 #include "gps_assist.h"
 
 /*
- * Inject all assistance data (ephemerides, iono, UTC) into the nRF
- * GNSS modem via nrf_modem_gnss_agnss_write().
+ * Inject all assistance data (ephemerides, iono, UTC, system time,
+ * location) into the nRF GNSS modem unconditionally.
  * Call after nrf_modem_gnss_init() and before starting a fix.
  *
  * Returns 0 on success, negative errno on failure.
  */
 int gps_assist_inject(const struct gps_assist_data *data);
+
+/*
+ * Per-type injection function for fine-grained control.
+ */
+int gps_assist_inject_location(const struct gps_assist_data *data);

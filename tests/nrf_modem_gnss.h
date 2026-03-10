@@ -73,6 +73,7 @@ struct nrf_modem_gnss_agnss_data_klobuchar {
 };
 
 #define NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS         6
+#define NRF_MODEM_GNSS_AGNSS_LOCATION                          7
 
 #define NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW 32
 
@@ -88,6 +89,17 @@ struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow {
 	uint32_t sv_mask;    /* PRN bitmask for valid TOW entries */
 	struct nrf_modem_gnss_agnss_gps_data_tow_element
 		sv_tow[NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW];
+};
+
+struct nrf_modem_gnss_agnss_data_location {
+	int32_t  latitude;       /* coded: N <= (2^23/90) * deg */
+	int32_t  longitude;      /* coded: N <= (2^24/360) * deg */
+	int16_t  altitude;       /* meters above WGS-84 */
+	uint8_t  unc_semimajor;  /* 0..127, 255=invalid lat/lon */
+	uint8_t  unc_semiminor;  /* 0..127, 255=invalid lat/lon */
+	uint8_t  orientation_major; /* degrees 0..179 */
+	uint8_t  unc_altitude;   /* 0..127, 255=invalid altitude */
+	uint8_t  confidence;     /* percent 0..128, 0=no info */
 };
 
 /*

@@ -148,7 +148,9 @@ static void test_inject_call_count(void)
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 1 ephemeris + 1 iono + 1 utc + 1 system_time = 4 calls */
+	/* 1 ephemeris + 1 iono + 1 utc + 1 system_time = 4 calls
+	 * (no location since location.valid == 0)
+	 */
 	ASSERT_INT_EQ(mock_write_count, 4);
 	PASS();
 	return;
@@ -388,6 +390,59 @@ static void test_convert_system_time(void)
 out:;
 }
 
+static void test_inject_with_location(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.location.latitude  = 48.8566;
+	d.location.longitude = 2.3522;
+	d.location.altitude  = 35;
+	d.location.valid     = 1;
+
+	TEST("inject: with location -> 5 agnss_write calls");
+	mock_reset();
+	int rc = gps_assist_inject(&d);
+	ASSERT_INT_EQ(rc, 0);
+	/* 1 eph + 1 iono + 1 utc + 1 systime + 1 location = 5 */
+	ASSERT_INT_EQ(mock_write_count, 5);
+	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_LOCATION);
+	ASSERT_INT_EQ(mock_write_sizes[4], (int)sizeof(struct nrf_modem_gnss_agnss_data_location));
+	PASS();
+	return;
+out:;
+}
+
+static void test_convert_location(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.location.latitude  = 48.8566;
+	d.location.longitude = 2.3522;
+	d.location.altitude  = 35;
+	d.location.valid     = 1;
+
+	TEST("convert: location lat/lon encoding");
+
+	/*
+	 * latitude coded:  N = (2^23 / 90) * 48.8566 = ~4549098
+	 * longitude coded: N = (2^24 / 360) * 2.3522  = ~109697
+	 */
+	int32_t expected_lat = (int32_t)round(48.8566 * (double)(1 << 23) / 90.0);
+	int32_t expected_lon = (int32_t)round(2.3522 * (double)(1 << 24) / 360.0);
+
+	ASSERT_TRUE(expected_lat > 4500000 && expected_lat < 4600000);
+	ASSERT_TRUE(expected_lon > 100000 && expected_lon < 120000);
+
+	mock_reset();
+	gps_assist_inject_location(&d);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_LOCATION);
+
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -404,7 +459,9 @@ int main(void)
 	test_convert_iono_roundtrip();
 	test_convert_utc_roundtrip();
 	test_inject_multi_sv();
+	test_inject_with_location();
 	test_convert_system_time();
+	test_convert_location();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

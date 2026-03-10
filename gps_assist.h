@@ -65,12 +65,20 @@ struct gps_utc {
 	int8_t   dt_ls;     /* Current UTC leap seconds (s) */
 };
 
+struct gps_location {
+	double  latitude;   /* Geodetic latitude in degrees (-90..90) */
+	double  longitude;  /* Geodetic longitude in degrees (-180..180) */
+	int16_t altitude;   /* Meters above WGS-84 ellipsoid */
+	uint8_t valid;      /* Non-zero if lat/lon are populated */
+};
+
 struct gps_assist_data {
 	uint32_t           timestamp;            /* Unix time of generation */
 	uint16_t           gps_week;             /* Reference GPS week */
 	uint8_t            num_sv;               /* Number of satellite entries */
 	struct gps_iono    iono;                 /* Ionospheric model */
 	struct gps_utc     utc;                  /* UTC parameters */
+	struct gps_location location;            /* Approximate reference location */
 	struct gps_ephemeris sv[GPS_MAX_SATS];   /* Satellite ephemerides */
 };
 
