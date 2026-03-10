@@ -51,3 +51,7 @@ int gps_assist_inject_utc(const struct gps_assist_data *data);
 int gps_assist_inject_klobuchar(const struct gps_assist_data *data);
 int gps_assist_inject_system_time(const struct gps_assist_data *data);
 int gps_assist_inject_location(const struct gps_assist_data *data);
+int gps_assist_inject_qzss_ephemeris(const struct gps_assist_data *data,
+				     uint8_t prn);
+int gps_assist_inject_qzss_almanac(const struct gps_assist_data *data,
+				   uint8_t prn);

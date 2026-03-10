@@ -52,8 +52,8 @@ static int tests_passed;
 
 /*
  * Minimal RINEX v3.04 navigation file fixture.
- * Contains one GPS satellite (G01) with known ephemeris values,
- * ionospheric corrections, UTC parameters, and leap seconds.
+ * Contains one GPS satellite (G01), one QZSS satellite (J01),
+ * and one GLONASS satellite (R01, skipped).
  */
 /* Each header line: 60 chars data + 20 chars label = 80 columns */
 static const char rinex_fixture[] =
@@ -72,6 +72,14 @@ static const char rinex_fixture[] =
 "    -6.500270762369D-11 1.000000000000D+00 2.409000000000D+03 0.000000000000D+00\n"
 "     2.000000000000D+00 0.000000000000D+00-9.313225746155D-09 9.330000000000D+02\n"
 "     7.948800000000D+04 4.000000000000D+00 0.000000000000D+00 0.000000000000D+00\n"
+"J01 2026 03 09 02 00 00 1.127189025283D-04 2.273736754432D-12 0.000000000000D+00\n"
+"     5.700000000000D+01 2.234375000000D+02 2.862944186498D-09 2.710635288216D+00\n"
+"     1.068785786629D-05 7.548052072525D-02 7.372349500656D-06 6.493282413483D+03\n"
+"     9.360000000000D+04-3.725290298462D-09 1.448671913564D+00-1.117587089539D-08\n"
+"     7.200032782573D-01 2.171875000000D+01 1.099015085551D+00-3.485049934832D-09\n"
+"     1.064907174953D-10 1.000000000000D+00 2.409000000000D+03 0.000000000000D+00\n"
+"     2.800000000000D+00 0.000000000000D+00-4.656612873077D-09 5.700000000000D+01\n"
+"     8.640000000000D+04 4.000000000000D+00 0.000000000000D+00 0.000000000000D+00\n"
 "R01 2026 03 09 00 15 00 2.365745604038D-04-2.728484105319D-12 0.000000000000D+00\n"
 "     1.000000000000D+00-1.018750000000D+01 3.063621520996D-09 0.000000000000D+00\n"
 "     2.041721191406D+04 2.178478240967D+00-1.218914985657D+03 0.000000000000D+00\n"
@@ -246,6 +254,49 @@ static void test_parse_toc(void)
 out:;
 }
 
+static void test_parse_qzss_count(void)
+{
+	struct gps_assist_data data;
+	rinex_parse(fixture_path, &data);
+
+	TEST("parse fixture: 1 QZSS satellite");
+	ASSERT_INT_EQ(data.num_qzss, 1);
+	PASS();
+	return;
+out:;
+}
+
+static void test_parse_qzss_prn(void)
+{
+	struct gps_assist_data data;
+	rinex_parse(fixture_path, &data);
+
+	TEST("parse fixture: QZSS PRN = 193 (J01)");
+	ASSERT_INT_EQ(data.qzss[0].prn, 193);
+	PASS();
+	return;
+out:;
+}
+
+static void test_parse_qzss_orbit(void)
+{
+	struct gps_assist_data data;
+	rinex_parse(fixture_path, &data);
+
+	TEST("parse fixture: QZSS orbital parameters");
+	/* QZSS has higher eccentricity and different sqrt_a than GPS */
+	ASSERT_DBL_NEAR(data.qzss[0].e, 7.548052072525e-02, 1e-14);
+	ASSERT_DBL_NEAR(data.qzss[0].sqrt_a, 6.493282413483e+03, 1e-8);
+	ASSERT_INT_EQ(data.qzss[0].toe, 93600);
+	ASSERT_INT_EQ(data.qzss[0].week, 2409);
+	ASSERT_DBL_NEAR(data.qzss[0].af0, 1.127189025283e-04, 1e-16);
+	/* GPS satellite count should be unaffected */
+	ASSERT_INT_EQ(data.num_sv, 1);
+	PASS();
+	return;
+out:;
+}
+
 static void test_download_and_parse(void)
 {
 	struct gps_assist_data data;
@@ -316,6 +367,9 @@ int main(int argc, char **argv)
 	test_parse_iono();
 	test_parse_utc();
 	test_parse_toc();
+	test_parse_qzss_count();
+	test_parse_qzss_prn();
+	test_parse_qzss_orbit();
 
 	if (integration)
 		test_download_and_parse();

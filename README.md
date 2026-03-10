@@ -249,8 +249,9 @@ Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) is not provided yet.
 
 It is just for testing, then it can become a web service solution.
 
-### GPS only
+### GPS + QZSS only
 
-Only GPS (constellation `G`) satellites are parsed. GLONASS, Galileo,
-and BeiDou records in the RINEX file are skipped. The nRF9151 modem
-primarily uses GPS for A-GNSS assistance.
+GPS (`G`) and QZSS (`J`) satellites are parsed. GLONASS, Galileo,
+and BeiDou records in the RINEX file are skipped. QZSS satellites
+(PRN 193-202) share the GPS ephemeris/almanac structs and are
+injected using the same `nrf_modem_gnss_agnss_write()` types.

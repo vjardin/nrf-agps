@@ -143,6 +143,15 @@ int codegen_write(const char *prefix, const struct gps_assist_data *data,
 		emit_ephemeris(fp, &data->sv[i]);
 	fprintf(fp, "\t},\n");
 
+	/* QZSS ephemerides */
+	if (data->num_qzss > 0) {
+		fprintf(fp, "\t.num_qzss = %u,\n", data->num_qzss);
+		fprintf(fp, "\t.qzss = {\n");
+		for (int i = 0; i < data->num_qzss; i++)
+			emit_ephemeris(fp, &data->qzss[i]);
+		fprintf(fp, "\t},\n");
+	}
+
 	fprintf(fp, "};\n");
 
 	fclose(fp);

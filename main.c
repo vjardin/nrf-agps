@@ -208,8 +208,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	fprintf(stderr, "Done: %d satellites, GPS week %u\n",
-		data.num_sv, data.gps_week);
+	fprintf(stderr, "Done: %d GPS", data.num_sv);
+	if (data.num_qzss)
+		fprintf(stderr, " + %d QZSS", data.num_qzss);
+	fprintf(stderr, " satellites, GPS week %u\n", data.gps_week);
 
 	if (!local_file)
 		remove(path);

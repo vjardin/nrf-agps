@@ -17,6 +17,8 @@
 #endif
 
 #define GPS_MAX_SATS 32
+#define QZSS_MAX_SATS 10
+#define QZSS_PRN_OFFSET 192  /* QZSS PRN = offset + slot (1-10) */
 
 struct gps_ephemeris {
 	uint8_t  prn;       /* PRN number (1-32) */
@@ -99,6 +101,8 @@ struct gps_assist_data {
 	uint8_t            num_alm;             /* Number of parsed almanac entries */
 	struct gps_almanac alm[GPS_MAX_SATS];   /* Parsed almanac (SEM/YUMA) */
 	struct gps_ephemeris sv[GPS_MAX_SATS];   /* Satellite ephemerides */
+	uint8_t            num_qzss;            /* Number of QZSS satellites */
+	struct gps_ephemeris qzss[QZSS_MAX_SATS]; /* QZSS ephemerides (PRN 193-202) */
 };
 
 /* Declared in the generated gps_assist_data.c */

@@ -294,6 +294,27 @@ static void save_ephemeris(struct gps_assist_data *data,
 	}
 }
 
+static void save_qzss_ephemeris(struct gps_assist_data *data,
+				const struct gps_ephemeris *eph)
+{
+	if (eph->prn < QZSS_PRN_OFFSET + 1 ||
+	    eph->prn > QZSS_PRN_OFFSET + QZSS_MAX_SATS)
+		return;
+
+	for (int i = 0; i < data->num_qzss; i++) {
+		if (data->qzss[i].prn == eph->prn) {
+			if (eph->toe >= data->qzss[i].toe)
+				data->qzss[i] = *eph;
+			return;
+		}
+	}
+
+	if (data->num_qzss < QZSS_MAX_SATS) {
+		data->qzss[data->num_qzss] = *eph;
+		data->num_qzss++;
+	}
+}
+
 int rinex_parse(const char *path, struct gps_assist_data *out)
 {
 	gzFile gz;
@@ -301,6 +322,7 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 	int in_header = 1;
 	int orbit_line = -1;
 	int is_gps = 0;
+	int is_qzss = 0;
 	struct gps_ephemeris eph;
 
 	memset(out, 0, sizeof(*out));
@@ -367,16 +389,21 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 
 		/* New satellite record (starts with a letter) */
 		if (line[0] >= 'A' && line[0] <= 'Z') {
-			/* Save previous GPS record if complete */
+			/* Save previous record if complete */
 			if (is_gps && orbit_line == 7)
 				save_ephemeris(out, &eph);
+			else if (is_qzss && orbit_line == 7)
+				save_qzss_ephemeris(out, &eph);
 
-			is_gps = (line[0] == 'G');
+			is_gps  = (line[0] == 'G');
+			is_qzss = (line[0] == 'J');
 			orbit_line = 0;
 
-			if (is_gps) {
+			if (is_gps || is_qzss) {
 				memset(&eph, 0, sizeof(eph));
 				parse_sv_epoch(line, &eph);
+				if (is_qzss)
+					eph.prn += QZSS_PRN_OFFSET;
 				if (out->gps_week == 0)
 					out->gps_week = eph.week;
 			}
@@ -384,7 +411,8 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 		}
 
 		/* Orbit data line (starts with spaces) */
-		if (is_gps && orbit_line >= 0 && orbit_line < 7) {
+		if ((is_gps || is_qzss) &&
+		    orbit_line >= 0 && orbit_line < 7) {
 			parse_orbit(line, orbit_line, &eph);
 			orbit_line++;
 		}
@@ -393,8 +421,13 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 	/* Save last record */
 	if (is_gps && orbit_line == 7)
 		save_ephemeris(out, &eph);
+	else if (is_qzss && orbit_line == 7)
+		save_qzss_ephemeris(out, &eph);
 
 	gzclose(gz);
-	fprintf(stderr, "Parsed %d GPS satellites\n", out->num_sv);
+	fprintf(stderr, "Parsed %d GPS", out->num_sv);
+	if (out->num_qzss)
+		fprintf(stderr, " + %d QZSS", out->num_qzss);
+	fprintf(stderr, " satellites\n");
 	return 0;
 }

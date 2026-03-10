@@ -782,6 +782,94 @@ static void test_inject_parsed_alm_in_full(void)
 out:;
 }
 
+static void test_inject_with_qzss(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	/* Add one QZSS satellite (PRN 193 = J01) */
+	d.num_qzss = 1;
+	d.qzss[0] = d.sv[0];
+	d.qzss[0].prn = 193;
+	d.qzss[0].e = 7.548052072525e-02;
+	d.qzss[0].sqrt_a = 6.493282413483e+03;
+
+	TEST("inject: GPS + QZSS -> 7 calls");
+	mock_reset();
+	int rc = gps_assist_inject(&d);
+	ASSERT_INT_EQ(rc, 0);
+	/* 1 GPS eph + 1 GPS alm + 1 QZSS eph + 1 QZSS alm
+	 * + iono + utc + systime = 7 */
+	ASSERT_INT_EQ(mock_write_count, 7);
+	/* GPS eph, GPS alm, QZSS eph, QZSS alm, iono, utc, systime */
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	PASS();
+	return;
+out:;
+}
+
+static void test_selective_inject_qzss(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_qzss = 1;
+	d.qzss[0] = d.sv[0];
+	d.qzss[0].prn = 193;
+
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.system_count = 1;
+	req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_QZSS;
+	/* Request PRN 193 (bit 0) */
+	req.system[0].sv_mask_ephe = (uint64_t)1 << 0;
+
+	TEST("selective: QZSS PRN 193 eph -> 1 call");
+	mock_reset();
+	int rc = gps_assist_inject_from_request(&d, &req);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	PASS();
+	return;
+out:;
+}
+
+static void test_expiry_qzss(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_qzss = 1;
+	d.qzss[0] = d.sv[0];
+	d.qzss[0].prn = 193;
+
+	TEST("expiry: QZSS eph expired -> 1 write");
+	mock_reset();
+
+	mock_expiry.data_flags = 0;
+	mock_expiry.sv_count = 2;
+	/* GPS SV: not expired */
+	mock_expiry.sv[0].sv_id = 1;
+	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	mock_expiry.sv[0].ephe_expiry = 60;
+	mock_expiry.sv[0].alm_expiry  = 60;
+	/* QZSS SV: eph expired */
+	mock_expiry.sv[1].sv_id = 193;
+	mock_expiry.sv[1].system_id = NRF_MODEM_GNSS_SYSTEM_QZSS;
+	mock_expiry.sv[1].ephe_expiry = 0;
+	mock_expiry.sv[1].alm_expiry  = 60;
+
+	int rc = gps_assist_check_expiry(&d);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -812,6 +900,9 @@ int main(void)
 	test_expiry_get_failure();
 	test_inject_prefer_parsed_almanac();
 	test_inject_parsed_alm_in_full();
+	test_inject_with_qzss();
+	test_selective_inject_qzss();
+	test_expiry_qzss();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

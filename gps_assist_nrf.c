@@ -297,6 +297,38 @@ int gps_assist_inject_almanac(const struct gps_assist_data *data,
 	return 0;  /* PRN not in dataset, not an error */
 }
 
+int gps_assist_inject_qzss_ephemeris(const struct gps_assist_data *data,
+				     uint8_t prn)
+{
+	for (int i = 0; i < data->num_qzss; i++) {
+		if (data->qzss[i].prn == prn) {
+			struct nrf_modem_gnss_agnss_gps_data_ephemeris eph;
+
+			convert_ephemeris(&data->qzss[i], &eph);
+			return (int)nrf_modem_gnss_agnss_write(
+				&eph, sizeof(eph),
+				NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+		}
+	}
+	return 0;
+}
+
+int gps_assist_inject_qzss_almanac(const struct gps_assist_data *data,
+				   uint8_t prn)
+{
+	for (int i = 0; i < data->num_qzss; i++) {
+		if (data->qzss[i].prn == prn) {
+			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+			convert_almanac(&data->qzss[i], data->gps_week, &alm);
+			return (int)nrf_modem_gnss_agnss_write(
+				&alm, sizeof(alm),
+				NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+		}
+	}
+	return 0;
+}
+
 int gps_assist_inject_ephemeris(const struct gps_assist_data *data,
 				uint8_t prn)
 {
@@ -394,6 +426,30 @@ int gps_assist_inject(const struct gps_assist_data *data)
 		}
 	}
 
+	/* Inject QZSS ephemerides */
+	for (int i = 0; i < data->num_qzss; i++) {
+		struct nrf_modem_gnss_agnss_gps_data_ephemeris eph;
+
+		convert_ephemeris(&data->qzss[i], &eph);
+		err = (int)nrf_modem_gnss_agnss_write(
+			&eph, sizeof(eph),
+			NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+		if (err)
+			return err;
+	}
+
+	/* Inject QZSS almanacs (always derived from ephemeris) */
+	for (int i = 0; i < data->num_qzss; i++) {
+		struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+		convert_almanac(&data->qzss[i], data->gps_week, &alm);
+		err = (int)nrf_modem_gnss_agnss_write(
+			&alm, sizeof(alm),
+			NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+		if (err)
+			return err;
+	}
+
 	/* Inject ionospheric correction */
 	struct nrf_modem_gnss_agnss_data_klobuchar iono;
 
@@ -457,29 +513,51 @@ int gps_assist_check_expiry(const struct gps_assist_data *data)
 	/* Collect expired ephemeris and almanac SVs into bitmasks */
 	uint64_t ephe_mask = 0;
 	uint64_t alm_mask  = 0;
+	uint64_t qzss_ephe_mask = 0;
+	uint64_t qzss_alm_mask  = 0;
 
 	for (int i = 0; i < exp.sv_count; i++) {
-		if (exp.sv[i].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
-			continue;
-		if (exp.sv[i].sv_id < 1 || exp.sv[i].sv_id > 32)
-			continue;
-		uint64_t bit = (uint64_t)1 << (exp.sv[i].sv_id - 1);
+		if (exp.sv[i].system_id == NRF_MODEM_GNSS_SYSTEM_GPS) {
+			if (exp.sv[i].sv_id < 1 || exp.sv[i].sv_id > 32)
+				continue;
+			uint64_t bit = (uint64_t)1 << (exp.sv[i].sv_id - 1);
 
-		if (exp.sv[i].ephe_expiry == 0)
-			ephe_mask |= bit;
-		if (exp.sv[i].alm_expiry == 0)
-			alm_mask |= bit;
+			if (exp.sv[i].ephe_expiry == 0)
+				ephe_mask |= bit;
+			if (exp.sv[i].alm_expiry == 0)
+				alm_mask |= bit;
+		} else if (exp.sv[i].system_id == NRF_MODEM_GNSS_SYSTEM_QZSS) {
+			uint8_t id = exp.sv[i].sv_id;
+
+			if (id < QZSS_PRN_OFFSET + 1 ||
+			    id > QZSS_PRN_OFFSET + QZSS_MAX_SATS)
+				continue;
+			uint64_t bit = (uint64_t)1 << (id - QZSS_PRN_OFFSET - 1);
+
+			if (exp.sv[i].ephe_expiry == 0)
+				qzss_ephe_mask |= bit;
+			if (exp.sv[i].alm_expiry == 0)
+				qzss_alm_mask |= bit;
+		}
 	}
 
 	if (ephe_mask || alm_mask) {
-		req.system_count = 1;
-		req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
-		req.system[0].sv_mask_ephe = ephe_mask;
-		req.system[0].sv_mask_alm  = alm_mask;
+		req.system[req.system_count].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+		req.system[req.system_count].sv_mask_ephe = ephe_mask;
+		req.system[req.system_count].sv_mask_alm  = alm_mask;
+		req.system_count++;
+	}
+
+	if (qzss_ephe_mask || qzss_alm_mask) {
+		req.system[req.system_count].system_id = NRF_MODEM_GNSS_SYSTEM_QZSS;
+		req.system[req.system_count].sv_mask_ephe = qzss_ephe_mask;
+		req.system[req.system_count].sv_mask_alm  = qzss_alm_mask;
+		req.system_count++;
 	}
 
 	/* Nothing to do */
-	if (!req.data_flags && !ephe_mask && !alm_mask)
+	if (!req.data_flags && !ephe_mask && !alm_mask &&
+	    !qzss_ephe_mask && !qzss_alm_mask)
 		return 0;
 
 	return gps_assist_inject_from_request(data, &req);
@@ -492,26 +570,44 @@ int gps_assist_inject_from_request(const struct gps_assist_data *data,
 
 	/* Per-SV ephemeris and almanac injection based on request bitmasks */
 	for (int s = 0; s < req->system_count; s++) {
-		if (req->system[s].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
-			continue;
-
 		uint64_t ephe_mask = req->system[s].sv_mask_ephe;
 		uint64_t alm_mask  = req->system[s].sv_mask_alm;
 
-		for (int prn = 1; prn <= 32; prn++) {
-			uint64_t bit = (uint64_t)1 << (prn - 1);
+		if (req->system[s].system_id == NRF_MODEM_GNSS_SYSTEM_GPS) {
+			for (int prn = 1; prn <= 32; prn++) {
+				uint64_t bit = (uint64_t)1 << (prn - 1);
 
-			if (ephe_mask & bit) {
-				err = gps_assist_inject_ephemeris(data,
-								 (uint8_t)prn);
-				if (err)
-					return err;
+				if (ephe_mask & bit) {
+					err = gps_assist_inject_ephemeris(
+						data, (uint8_t)prn);
+					if (err)
+						return err;
+				}
+				if (alm_mask & bit) {
+					err = gps_assist_inject_almanac(
+						data, (uint8_t)prn);
+					if (err)
+						return err;
+				}
 			}
-			if (alm_mask & bit) {
-				err = gps_assist_inject_almanac(data,
-							       (uint8_t)prn);
-				if (err)
-					return err;
+		} else if (req->system[s].system_id ==
+			   NRF_MODEM_GNSS_SYSTEM_QZSS) {
+			for (int slot = 0; slot < QZSS_MAX_SATS; slot++) {
+				uint8_t prn = QZSS_PRN_OFFSET + 1 + slot;
+				uint64_t bit = (uint64_t)1 << slot;
+
+				if (ephe_mask & bit) {
+					err = gps_assist_inject_qzss_ephemeris(
+						data, prn);
+					if (err)
+						return err;
+				}
+				if (alm_mask & bit) {
+					err = gps_assist_inject_qzss_almanac(
+						data, prn);
+					if (err)
+						return err;
+				}
 			}
 		}
 	}
