@@ -164,6 +164,7 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 | Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
 | UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
 | GPS system time | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS` | Generation timestamp |
+| Almanac (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC` | Derived from ephemeris |
 | Location | `NRF_MODEM_GNSS_AGNSS_LOCATION` | Optional `-l LAT,LON` hint |
 
 ## Tests

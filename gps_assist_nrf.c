@@ -187,6 +187,67 @@ static void convert_location(const struct gps_location *src,
 	dst->confidence    = 68;   /* ~1 sigma */
 }
 
+/*
+ * Derive a reduced-precision almanac from ephemeris data.
+ * RINEX broadcast files don't contain almanac records, but the modem
+ * accepts them for coarse orbit prediction. All almanac fields are a
+ * subset of the ephemeris with lower scale factors.
+ *
+ * GPS almanac scale factors (IS-GPS-200 Table 20-VI):
+ *   e:         2^-21           (16-bit unsigned)
+ *   toa:       2^12  s         (8-bit unsigned)
+ *   delta_i:   2^-19 sc        (16-bit signed, offset from 0.3 sc = 54°)
+ *   omega_dot: 2^-38 sc/s      (16-bit signed)
+ *   sqrt_a:    2^-11 m^0.5     (24-bit unsigned)
+ *   omega0:    2^-23 sc        (24-bit signed)
+ *   w:         2^-23 sc        (24-bit signed)
+ *   m0:        2^-23 sc        (24-bit signed)
+ *   af0:       2^-20 s         (11-bit signed)
+ *   af1:       2^-38 s/s       (11-bit signed)
+ */
+static void convert_almanac(const struct gps_ephemeris *src, uint16_t week,
+			    struct nrf_modem_gnss_agnss_gps_data_almanac *dst)
+{
+	memset(dst, 0, sizeof(*dst));
+
+	dst->sv_id     = src->prn;
+	dst->wn        = (uint8_t)(week & 0xFF);
+	dst->toa       = (uint8_t)(src->toe / 4096);
+	dst->ioda      = 0;
+	dst->sv_health = src->health;
+
+	dst->e         = (uint16_t)round(src->e / 4.76837158203125e-07);                     /* 2^-21 */
+	dst->sqrt_a    = (uint32_t)round(src->sqrt_a / 4.88281250000000000000e-04);           /* 2^-11 */
+
+	/* delta_i = inclination - 0.3 semi-circles (nominal 54°) */
+	double i0_sc = rad2sc(src->i0);
+	dst->delta_i   = (int16_t)round((i0_sc - 0.3) / 1.90734863281250000000e-06);         /* 2^-19 */
+
+	dst->omega_dot = (int16_t)round(rad2sc(src->omega_dot) / 3.63797880709171295166e-12); /* 2^-38 */
+	dst->omega0    = (int32_t)round(rad2sc(src->omega0) / 1.19209289550781250000e-07);    /* 2^-23 */
+	dst->w         = (int32_t)round(rad2sc(src->omega) / 1.19209289550781250000e-07);     /* 2^-23 */
+	dst->m0        = (int32_t)round(rad2sc(src->m0) / 1.19209289550781250000e-07);        /* 2^-23 */
+
+	dst->af0       = (int16_t)round(src->af0 / 9.53674316406250000000e-07);               /* 2^-20 */
+	dst->af1       = (int16_t)round(src->af1 / 3.63797880709171295166e-12);               /* 2^-38 */
+}
+
+int gps_assist_inject_almanac(const struct gps_assist_data *data,
+			      uint8_t prn)
+{
+	for (int i = 0; i < data->num_sv; i++) {
+		if (data->sv[i].prn == prn) {
+			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+			convert_almanac(&data->sv[i], data->gps_week, &alm);
+			return (int)nrf_modem_gnss_agnss_write(
+				&alm, sizeof(alm),
+				NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+		}
+	}
+	return 0;  /* PRN not in dataset, not an error */
+}
+
 int gps_assist_inject_ephemeris(const struct gps_assist_data *data,
 				uint8_t prn)
 {
@@ -247,7 +308,7 @@ int gps_assist_inject(const struct gps_assist_data *data)
 {
 	int err;
 
-	/* Inject ephemerides */
+	/* Inject ephemerides and almanacs */
 	for (int i = 0; i < data->num_sv; i++) {
 		struct nrf_modem_gnss_agnss_gps_data_ephemeris eph;
 
@@ -255,6 +316,15 @@ int gps_assist_inject(const struct gps_assist_data *data)
 		err = (int)nrf_modem_gnss_agnss_write(
 			&eph, sizeof(eph),
 			NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+		if (err)
+			return err;
+
+		struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+		convert_almanac(&data->sv[i], data->gps_week, &alm);
+		err = (int)nrf_modem_gnss_agnss_write(
+			&alm, sizeof(alm),
+			NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
 		if (err)
 			return err;
 	}
@@ -319,25 +389,32 @@ int gps_assist_check_expiry(const struct gps_assist_data *data)
 	memset(&req, 0, sizeof(req));
 	req.data_flags = exp.data_flags;
 
-	/* Collect expired ephemeris SVs into a bitmask */
+	/* Collect expired ephemeris and almanac SVs into bitmasks */
 	uint64_t ephe_mask = 0;
+	uint64_t alm_mask  = 0;
 
 	for (int i = 0; i < exp.sv_count; i++) {
 		if (exp.sv[i].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
 			continue;
-		if (exp.sv[i].ephe_expiry == 0 &&
-		    exp.sv[i].sv_id >= 1 && exp.sv[i].sv_id <= 32)
-			ephe_mask |= (uint64_t)1 << (exp.sv[i].sv_id - 1);
+		if (exp.sv[i].sv_id < 1 || exp.sv[i].sv_id > 32)
+			continue;
+		uint64_t bit = (uint64_t)1 << (exp.sv[i].sv_id - 1);
+
+		if (exp.sv[i].ephe_expiry == 0)
+			ephe_mask |= bit;
+		if (exp.sv[i].alm_expiry == 0)
+			alm_mask |= bit;
 	}
 
-	if (ephe_mask) {
+	if (ephe_mask || alm_mask) {
 		req.system_count = 1;
 		req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
 		req.system[0].sv_mask_ephe = ephe_mask;
+		req.system[0].sv_mask_alm  = alm_mask;
 	}
 
 	/* Nothing to do */
-	if (!req.data_flags && !ephe_mask)
+	if (!req.data_flags && !ephe_mask && !alm_mask)
 		return 0;
 
 	return gps_assist_inject_from_request(data, &req);
@@ -348,19 +425,29 @@ int gps_assist_inject_from_request(const struct gps_assist_data *data,
 {
 	int err;
 
-	/* Per-SV ephemeris injection based on request bitmask */
+	/* Per-SV ephemeris and almanac injection based on request bitmasks */
 	for (int s = 0; s < req->system_count; s++) {
 		if (req->system[s].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
 			continue;
 
-		uint64_t mask = req->system[s].sv_mask_ephe;
+		uint64_t ephe_mask = req->system[s].sv_mask_ephe;
+		uint64_t alm_mask  = req->system[s].sv_mask_alm;
 
 		for (int prn = 1; prn <= 32; prn++) {
-			if (!(mask & ((uint64_t)1 << (prn - 1))))
-				continue;
-			err = gps_assist_inject_ephemeris(data, (uint8_t)prn);
-			if (err)
-				return err;
+			uint64_t bit = (uint64_t)1 << (prn - 1);
+
+			if (ephe_mask & bit) {
+				err = gps_assist_inject_ephemeris(data,
+								 (uint8_t)prn);
+				if (err)
+					return err;
+			}
+			if (alm_mask & bit) {
+				err = gps_assist_inject_almanac(data,
+							       (uint8_t)prn);
+				if (err)
+					return err;
+			}
 		}
 	}
 

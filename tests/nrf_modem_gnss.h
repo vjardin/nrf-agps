@@ -69,6 +69,23 @@ struct nrf_modem_gnss_agnss_gps_data_ephemeris {
 	int16_t  cuc;        /* 2^-29 rad */
 };
 
+struct nrf_modem_gnss_agnss_gps_data_almanac {
+	uint8_t  sv_id;      /* PRN 1-32 (GPS), 193-202 (QZSS) */
+	uint8_t  wn;         /* almanac ref GPS week mod 256 */
+	uint8_t  toa;        /* 2^12 s (range 0..147) */
+	uint8_t  ioda;       /* issue of data, almanac (2 bits) */
+	uint16_t e;          /* 2^-21 (dimensionless) */
+	int16_t  delta_i;    /* 2^-19 sc (offset from 0.3 sc) */
+	int16_t  omega_dot;  /* 2^-38 sc/s */
+	uint8_t  sv_health;
+	uint32_t sqrt_a;     /* 2^-11 m^0.5 (24-bit) */
+	int32_t  omega0;     /* 2^-23 sc (24-bit signed) */
+	int32_t  w;          /* 2^-23 sc */
+	int32_t  m0;         /* 2^-23 sc (24-bit signed) */
+	int16_t  af0;        /* 2^-20 s (11-bit signed) */
+	int16_t  af1;        /* 2^-38 s/s (11-bit signed) */
+};
+
 struct nrf_modem_gnss_agnss_data_klobuchar {
 	int8_t alpha0;       /* 2^-30 */
 	int8_t alpha1;       /* 2^-27 */

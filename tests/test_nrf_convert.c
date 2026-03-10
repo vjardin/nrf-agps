@@ -161,10 +161,10 @@ static void test_inject_call_count(void)
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 1 ephemeris + 1 iono + 1 utc + 1 system_time = 4 calls
+	/* 1 eph + 1 alm + 1 iono + 1 utc + 1 system_time = 5 calls
 	 * (no location since location.valid == 0)
 	 */
-	ASSERT_INT_EQ(mock_write_count, 4);
+	ASSERT_INT_EQ(mock_write_count, 5);
 	PASS();
 	return;
 out:;
@@ -178,9 +178,10 @@ static void test_inject_call_types(void)
 	mock_reset();
 	gps_assist_inject(&d);
 	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
-	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
-	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
 	PASS();
 	return;
 out:;
@@ -194,9 +195,10 @@ static void test_inject_call_sizes(void)
 	mock_reset();
 	gps_assist_inject(&d);
 	ASSERT_INT_EQ(mock_write_sizes[0], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_ephemeris));
-	ASSERT_INT_EQ(mock_write_sizes[1], (int)sizeof(struct nrf_modem_gnss_agnss_data_klobuchar));
-	ASSERT_INT_EQ(mock_write_sizes[2], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_utc));
-	ASSERT_INT_EQ(mock_write_sizes[3], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow));
+	ASSERT_INT_EQ(mock_write_sizes[1], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_almanac));
+	ASSERT_INT_EQ(mock_write_sizes[2], (int)sizeof(struct nrf_modem_gnss_agnss_data_klobuchar));
+	ASSERT_INT_EQ(mock_write_sizes[3], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_utc));
+	ASSERT_INT_EQ(mock_write_sizes[4], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow));
 	PASS();
 	return;
 out:;
@@ -365,17 +367,19 @@ static void test_inject_multi_sv(void)
 	d.sv[1] = d.sv[0];
 	d.sv[1].prn = 15;
 
-	TEST("inject: 2 SVs -> 5 agnss_write calls");
+	TEST("inject: 2 SVs -> 7 agnss_write calls");
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 2 ephemeris + 1 iono + 1 utc + 1 system_time = 5 */
-	ASSERT_INT_EQ(mock_write_count, 5);
+	/* 2*(eph+alm) + 1 iono + 1 utc + 1 system_time = 7 */
+	ASSERT_INT_EQ(mock_write_count, 7);
 	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
-	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
-	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+	ASSERT_INT_EQ(mock_write_types[5], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[6], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
 	PASS();
 	return;
 out:;
@@ -412,14 +416,14 @@ static void test_inject_with_location(void)
 	d.location.altitude  = 35;
 	d.location.valid     = 1;
 
-	TEST("inject: with location -> 5 agnss_write calls");
+	TEST("inject: with location -> 6 agnss_write calls");
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 1 eph + 1 iono + 1 utc + 1 systime + 1 location = 5 */
-	ASSERT_INT_EQ(mock_write_count, 5);
-	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_LOCATION);
-	ASSERT_INT_EQ(mock_write_sizes[4], (int)sizeof(struct nrf_modem_gnss_agnss_data_location));
+	/* 1 eph + 1 alm + 1 iono + 1 utc + 1 systime + 1 location = 6 */
+	ASSERT_INT_EQ(mock_write_count, 6);
+	ASSERT_INT_EQ(mock_write_types[5], NRF_MODEM_GNSS_AGNSS_LOCATION);
+	ASSERT_INT_EQ(mock_write_sizes[5], (int)sizeof(struct nrf_modem_gnss_agnss_data_location));
 	PASS();
 	return;
 out:;
@@ -552,6 +556,7 @@ static void test_expiry_nothing_expired(void)
 	mock_expiry.sv[0].sv_id = 1;
 	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
 	mock_expiry.sv[0].ephe_expiry = 60;  /* 60 min remaining */
+	mock_expiry.sv[0].alm_expiry  = 60;
 
 	int rc = gps_assist_check_expiry(&d);
 	ASSERT_INT_EQ(rc, 0);
@@ -578,9 +583,11 @@ static void test_expiry_utc_and_eph(void)
 	mock_expiry.sv[0].sv_id = 1;
 	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
 	mock_expiry.sv[0].ephe_expiry = 30;   /* still valid */
+	mock_expiry.sv[0].alm_expiry  = 30;
 	mock_expiry.sv[1].sv_id = 15;
 	mock_expiry.sv[1].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
 	mock_expiry.sv[1].ephe_expiry = 0;    /* expired */
+	mock_expiry.sv[1].alm_expiry  = 30;   /* still valid */
 
 	int rc = gps_assist_check_expiry(&d);
 	ASSERT_INT_EQ(rc, 0);
@@ -608,6 +615,98 @@ static void test_expiry_get_failure(void)
 out:;
 }
 
+static void test_convert_almanac_roundtrip(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	TEST("convert: almanac derived from ephemeris round-trip");
+
+	double e_orig = d.sv[0].e;
+	double sqrt_a_orig = d.sv[0].sqrt_a;
+	double m0_sc = d.sv[0].m0 / M_PI;
+	double omega0_sc = d.sv[0].omega0 / M_PI;
+
+	/* e: 2^-21 */
+	double lsb_e = 4.76837158203125e-07;
+	uint16_t e_alm = (uint16_t)round(e_orig / lsb_e);
+	double e_back = e_alm * lsb_e;
+	ASSERT_DBL_NEAR(e_back, e_orig, lsb_e);
+
+	/* sqrt_a: 2^-11 */
+	double lsb_sqrt_a = 4.88281250000000000000e-04;
+	uint32_t sqrt_a_alm = (uint32_t)round(sqrt_a_orig / lsb_sqrt_a);
+	double sqrt_a_back = sqrt_a_alm * lsb_sqrt_a;
+	ASSERT_DBL_NEAR(sqrt_a_back, sqrt_a_orig, lsb_sqrt_a);
+
+	/* m0: 2^-23 sc */
+	double lsb_ang = 1.19209289550781250000e-07;
+	int32_t m0_alm = (int32_t)round(m0_sc / lsb_ang);
+	double m0_back = m0_alm * lsb_ang;
+	ASSERT_DBL_NEAR(m0_back, m0_sc, lsb_ang);
+
+	/* omega0: 2^-23 sc */
+	int32_t omega0_alm = (int32_t)round(omega0_sc / lsb_ang);
+	double omega0_back = omega0_alm * lsb_ang;
+	ASSERT_DBL_NEAR(omega0_back, omega0_sc, lsb_ang);
+
+	PASS();
+	return;
+out:;
+}
+
+static void test_selective_inject_alm_mask(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_sv = 2;
+	d.sv[1] = d.sv[0];
+	d.sv[1].prn = 15;
+
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.system_count = 1;
+	req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	/* Request almanac for PRN 1 (bit 0) and ephemeris for PRN 15 (bit 14) */
+	req.system[0].sv_mask_alm  = (uint64_t)1 << 0;
+	req.system[0].sv_mask_ephe = (uint64_t)1 << 14;
+
+	TEST("selective: 1 alm + 1 eph by mask -> 2 calls");
+	mock_reset();
+	int rc = gps_assist_inject_from_request(&d, &req);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 2);
+	/* PRN 1 eph not requested, PRN 1 alm first, then PRN 15 eph */
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	PASS();
+	return;
+out:;
+}
+
+static void test_expiry_alm_expired(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	TEST("expiry: almanac expired -> 1 almanac write");
+	mock_reset();
+
+	mock_expiry.data_flags = 0;
+	mock_expiry.sv_count = 1;
+	mock_expiry.sv[0].sv_id = 1;
+	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	mock_expiry.sv[0].ephe_expiry = 60;  /* still valid */
+	mock_expiry.sv[0].alm_expiry  = 0;   /* expired */
+
+	int rc = gps_assist_check_expiry(&d);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -627,11 +726,14 @@ int main(void)
 	test_inject_with_location();
 	test_convert_system_time();
 	test_convert_location();
+	test_convert_almanac_roundtrip();
 	test_selective_inject_utc_only();
 	test_selective_inject_eph_mask();
+	test_selective_inject_alm_mask();
 	test_selective_inject_all_flags();
 	test_expiry_nothing_expired();
 	test_expiry_utc_and_eph();
+	test_expiry_alm_expired();
 	test_expiry_get_failure();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
