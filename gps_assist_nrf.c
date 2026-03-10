@@ -13,6 +13,7 @@
  */
 #include <math.h>
 #include <string.h>
+#include <time.h>
 #include <nrf_modem_gnss.h>
 
 #include "gps_assist.h"
@@ -21,6 +22,10 @@
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+/* GPS epoch: January 6, 1980 00:00:00 UTC */
+#define GPS_EPOCH_UNIX 315964800L
+#define GPS_LEAP_SECONDS 18
 
 static inline double rad2sc(double rad)
 {
@@ -129,6 +134,27 @@ static void convert_utc(const struct gps_utc *src,
 	dst->delta_tls = src->dt_ls;
 }
 
+/*
+ * Convert generation timestamp to GPS system time.
+ * GPS time = UTC + leap_seconds, referenced to GPS epoch (Jan 6, 1980).
+ */
+static void convert_system_time(const struct gps_assist_data *data,
+				struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow *dst)
+{
+	memset(dst, 0, sizeof(*dst));
+
+	time_t unix_t = (time_t)data->timestamp;
+	long gps_t = (long)(unix_t - GPS_EPOCH_UNIX) + GPS_LEAP_SECONDS;
+
+	long gps_days = gps_t / 86400;
+	long time_of_day = gps_t % 86400;
+
+	dst->date_day    = (uint16_t)gps_days;
+	dst->time_full_s = (uint32_t)time_of_day;
+	dst->time_frac_ms = 0;
+	dst->sv_mask     = 0;  /* no per-SV TOW data */
+}
+
 int gps_assist_inject(const struct gps_assist_data *data)
 {
 	int err;
@@ -162,6 +188,16 @@ int gps_assist_inject(const struct gps_assist_data *data)
 	err = (int)nrf_modem_gnss_agnss_write(
 		&utc, sizeof(utc),
 		NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	if (err)
+		return err;
+
+	/* Inject system time */
+	struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow st;
+
+	convert_system_time(data, &st);
+	err = (int)nrf_modem_gnss_agnss_write(
+		&st, sizeof(st),
+		NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
 	if (err)
 		return err;
 

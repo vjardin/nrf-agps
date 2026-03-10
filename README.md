@@ -122,6 +122,7 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 | Ephemeris (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES` | RINEX nav records |
 | Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
 | UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
+| GPS system time | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS` | Generation timestamp |
 
 ## Tests
 
@@ -164,15 +165,13 @@ Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
 
 ## Limitations
 
-### No real-time reference time or position
+### No reference position
 
 The nRF modem also benefits from:
 
-- Reference time (`NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS`) —
-  not provided. The modem can obtain time from the LTE network or an RTC or NTP.
 - Reference position (`NRF_MODEM_GNSS_AGNSS_LOCATION`) — not
   provided. A rough hardcoded position could be added to further reduce
-  TTFF (center of France ?).
+  TTFF.
 - Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) — TBD ?
 
 ### Compile-time data only

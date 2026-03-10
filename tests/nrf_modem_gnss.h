@@ -72,6 +72,24 @@ struct nrf_modem_gnss_agnss_data_klobuchar {
 	int8_t beta3;        /* 2^16 */
 };
 
+#define NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS         6
+
+#define NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW 32
+
+struct nrf_modem_gnss_agnss_gps_data_tow_element {
+	uint16_t tlm;        /* TLM word (2 reserved + 14 TLM bits) */
+	uint8_t  flags;      /* bit 0: anti-spoof, bit 1: alert */
+};
+
+struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow {
+	uint16_t date_day;   /* days since Jan 6, 1980 00:00:00 UTC */
+	uint32_t time_full_s;/* seconds of day 0..86399 */
+	uint16_t time_frac_ms;/* fractional ms 0..999 */
+	uint32_t sv_mask;    /* PRN bitmask for valid TOW entries */
+	struct nrf_modem_gnss_agnss_gps_data_tow_element
+		sv_tow[NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW];
+};
+
 /*
  * Mock write function — records calls for verification.
  * Defined in test_nrf_convert.c.

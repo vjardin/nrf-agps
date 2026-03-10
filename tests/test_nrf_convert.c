@@ -15,6 +15,7 @@
 #include <string.h>
 #include <math.h>
 #include <assert.h>
+#include <time.h>
 
 /*
  * The mock header is picked up by gps_assist_nrf.c via -I tests/
@@ -91,6 +92,7 @@ static struct gps_assist_data make_test_data(void)
 
 	d.gps_week = 2409;
 	d.num_sv = 1;
+	d.timestamp = 1773064800U;
 
 	d.iono.alpha[0] = 1.1176e-08;
 	d.iono.alpha[1] = 0.0;
@@ -146,8 +148,8 @@ static void test_inject_call_count(void)
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 1 ephemeris + 1 iono + 1 utc = 3 calls */
-	ASSERT_INT_EQ(mock_write_count, 3);
+	/* 1 ephemeris + 1 iono + 1 utc + 1 system_time = 4 calls */
+	ASSERT_INT_EQ(mock_write_count, 4);
 	PASS();
 	return;
 out:;
@@ -163,6 +165,7 @@ static void test_inject_call_types(void)
 	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
 	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
 	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
 	PASS();
 	return;
 out:;
@@ -178,6 +181,7 @@ static void test_inject_call_sizes(void)
 	ASSERT_INT_EQ(mock_write_sizes[0], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_ephemeris));
 	ASSERT_INT_EQ(mock_write_sizes[1], (int)sizeof(struct nrf_modem_gnss_agnss_data_klobuchar));
 	ASSERT_INT_EQ(mock_write_sizes[2], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_utc));
+	ASSERT_INT_EQ(mock_write_sizes[3], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow));
 	PASS();
 	return;
 out:;
@@ -346,16 +350,39 @@ static void test_inject_multi_sv(void)
 	d.sv[1] = d.sv[0];
 	d.sv[1].prn = 15;
 
-	TEST("inject: 2 SVs -> 4 agnss_write calls");
+	TEST("inject: 2 SVs -> 5 agnss_write calls");
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 2 ephemeris + 1 iono + 1 utc = 4 */
-	ASSERT_INT_EQ(mock_write_count, 4);
+	/* 2 ephemeris + 1 iono + 1 utc + 1 system_time = 5 */
+	ASSERT_INT_EQ(mock_write_count, 5);
 	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
 	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
 	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
 	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
+	PASS();
+	return;
+out:;
+}
+
+static void test_convert_system_time(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	TEST("convert: system time from unix timestamp");
+
+	long gps_t = (long)(d.timestamp - 315964800L) + 18;
+	uint16_t expected_days = (uint16_t)(gps_t / 86400);
+	uint32_t expected_tod  = (uint32_t)(gps_t % 86400);
+
+	ASSERT_TRUE(expected_days > 16000);
+	ASSERT_TRUE(expected_tod < 86400);
+	/* Round-trip: days*86400 + tod + epoch - leap = original timestamp */
+	long reconstructed = (long)expected_days * 86400 + expected_tod
+			   + 315964800L - 18;
+	ASSERT_INT_EQ((int32_t)reconstructed, (int32_t)d.timestamp);
+
 	PASS();
 	return;
 out:;
@@ -377,6 +404,7 @@ int main(void)
 	test_convert_iono_roundtrip();
 	test_convert_utc_roundtrip();
 	test_inject_multi_sv();
+	test_convert_system_time();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;
