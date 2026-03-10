@@ -25,6 +25,7 @@ make
 
 Options:
   -d YYYY-MM-DD  Date to download (default: yesterday)
+  -l LAT,LON    Approximate reference location (default: Paris Notre Dame)
   -o PREFIX      Output file prefix (default: gps_assist_data)
   -u URL         Custom RINEX navigation file URL
   -f FILE        Parse local RINEX file instead of downloading
@@ -45,6 +46,9 @@ Options:
 
 # Custom output path
 ./rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+
+# Override default location (e.g. Berlin)
+./rinex_dl -l 52.5200,13.4050
 ```
 
 The tool downloads the combined BRDC navigation file from

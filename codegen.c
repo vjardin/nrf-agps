@@ -98,6 +98,16 @@ int codegen_write(const char *prefix, const struct gps_assist_data *data,
 	fprintf(fp, "\t\t.dt_ls = %d,\n", data->utc.dt_ls);
 	fprintf(fp, "\t},\n");
 
+	/* Location */
+	if (data->location.valid) {
+		fprintf(fp, "\t.location = {\n");
+		fprintf(fp, "\t\t.latitude = %.4f,\n", data->location.latitude);
+		fprintf(fp, "\t\t.longitude = %.4f,\n", data->location.longitude);
+		fprintf(fp, "\t\t.altitude = %d,\n", data->location.altitude);
+		fprintf(fp, "\t\t.valid = 1,\n");
+		fprintf(fp, "\t},\n");
+	}
+
 	/* Satellite ephemerides */
 	fprintf(fp, "\t.sv = {\n");
 	for (int i = 0; i < data->num_sv; i++)

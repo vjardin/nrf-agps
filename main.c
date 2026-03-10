@@ -40,6 +40,7 @@ static void usage(const char *prog)
 		"  -d YYYY-MM-DD  Date to download (default: yesterday)\n"
 		"  -o PREFIX      Output file prefix (default: gps_assist_data)\n"
 		"  -u URL         Custom RINEX navigation file URL\n"
+		"  -l LAT,LON    Approximate reference location (default: Paris Notre Dame)\n"
 		"  -f FILE        Parse local RINEX file instead of downloading\n"
 		"  -h             Show this help\n",
 		prog);
@@ -51,9 +52,11 @@ int main(int argc, char **argv)
 	const char *output = "gps_assist_data";
 	const char *url = NULL;
 	const char *local_file = NULL;
+	double ref_lat = 48.8530;   /* Paris Notre Dame */
+	double ref_lon = 2.3498;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:o:u:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "d:l:o:u:f:h")) != -1) {
 		switch (opt) {
 		case 'd':
 			if (sscanf(optarg, "%d-%d-%d",
@@ -65,6 +68,20 @@ int main(int argc, char **argv)
 			if (month < 1 || month > 12 ||
 			    day < 1 || day > 31) {
 				fprintf(stderr, "Invalid date: %s\n", optarg);
+				return 1;
+			}
+			break;
+		case 'l':
+			if (sscanf(optarg, "%lf,%lf",
+				   &ref_lat, &ref_lon) != 2) {
+				fprintf(stderr, "Bad location format: %s "
+					"(expected LAT,LON)\n", optarg);
+				return 1;
+			}
+			if (ref_lat < -90 || ref_lat > 90 ||
+			    ref_lon < -180 || ref_lon > 180) {
+				fprintf(stderr, "Invalid coordinates: %s\n",
+					optarg);
 				return 1;
 			}
 			break;
@@ -140,6 +157,10 @@ int main(int argc, char **argv)
 	}
 
 	data.timestamp = (uint32_t)time(NULL);
+	data.location.latitude  = ref_lat;
+	data.location.longitude = ref_lon;
+	data.location.altitude  = 0;
+	data.location.valid     = 1;
 
 	/* Generate C source */
 	const char *source = strrchr(path, '/');
