@@ -131,8 +131,29 @@ struct nrf_modem_gnss_agnss_data_frame {
 	struct nrf_modem_gnss_agnss_system_data_need system[NRF_MODEM_GNSS_MAX_SYSTEMS];
 };
 
+#define NRF_MODEM_GNSS_MAX_SV_EXPIRY_TIMES 127
+
+struct nrf_modem_gnss_agnss_sv_expiry {
+	uint8_t  sv_id;
+	uint8_t  system_id;
+	uint16_t ephe_expiry;    /* minutes, 0=expired, 0xffff=not used */
+	uint16_t alm_expiry;     /* minutes, 0=expired, 0xffff=not used */
+};
+
+struct nrf_modem_gnss_agnss_expiry {
+	uint32_t data_flags;     /* bitmask of needed data types */
+	uint16_t utc_expiry;
+	uint16_t klob_expiry;
+	uint16_t neq_expiry;
+	uint16_t integrity_expiry;
+	uint16_t position_expiry;
+	uint8_t  sv_count;
+	struct nrf_modem_gnss_agnss_sv_expiry sv[NRF_MODEM_GNSS_MAX_SV_EXPIRY_TIMES];
+};
+
 /*
- * Mock write function — records calls for verification.
+ * Mock functions — record calls for verification.
  * Defined in test_nrf_convert.c.
  */
 int32_t nrf_modem_gnss_agnss_write(void *buf, int32_t buf_len, uint16_t type);
+int32_t nrf_modem_gnss_agnss_expiry_get(struct nrf_modem_gnss_agnss_expiry *expiry);

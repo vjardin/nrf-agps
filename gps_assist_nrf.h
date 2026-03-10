@@ -32,6 +32,15 @@ int gps_assist_inject_from_request(const struct gps_assist_data *data,
 				   const struct nrf_modem_gnss_agnss_data_frame *req);
 
 /*
+ * Check what assistance data has expired and re-inject it.
+ * Calls nrf_modem_gnss_agnss_expiry_get() to query the modem,
+ * then re-injects any data whose expiry time is 0 (needed now).
+ *
+ * Returns 0 on success, negative errno on failure.
+ */
+int gps_assist_check_expiry(const struct gps_assist_data *data);
+
+/*
  * Per-type injection functions for fine-grained control.
  */
 int gps_assist_inject_ephemeris(const struct gps_assist_data *data,

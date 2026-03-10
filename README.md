@@ -111,6 +111,22 @@ Per-type injection functions (`gps_assist_inject_ephemeris()`,
 `gps_assist_inject_utc()`, etc.) are also available for fine-grained
 control.
 
+### Expiry-aware refresh
+
+`gps_assist_check_expiry()` queries the modem for what data has expired
+and re-injects only the stale items:
+
+```c
+/* Periodically (e.g. every 30 min), or before starting a new fix */
+int err = gps_assist_check_expiry(&gps_assist);
+if (err)
+    LOG_ERR("Expiry refresh failed: %d", err);
+```
+
+This calls `nrf_modem_gnss_agnss_expiry_get()` under the hood. Any
+ephemeris with `ephe_expiry == 0` is re-injected, along with UTC,
+Klobuchar, system time, or position data flagged in `data_flags`.
+
 ## Why this should work for the nRF9151
 
 The nRF9151 modem exposes `nrf_modem_gnss_agnss_write()` which accepts

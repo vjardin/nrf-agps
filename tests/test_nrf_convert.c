@@ -77,11 +77,24 @@ int32_t nrf_modem_gnss_agnss_write(void *buf, int32_t buf_len,
 	return 0;
 }
 
+static struct nrf_modem_gnss_agnss_expiry mock_expiry;
+static int32_t mock_expiry_ret;
+
+int32_t nrf_modem_gnss_agnss_expiry_get(struct nrf_modem_gnss_agnss_expiry *expiry)
+{
+	if (mock_expiry_ret)
+		return mock_expiry_ret;
+	*expiry = mock_expiry;
+	return 0;
+}
+
 static void mock_reset(void)
 {
 	mock_write_count = 0;
 	memset(mock_write_types, 0, sizeof(mock_write_types));
 	memset(mock_write_sizes, 0, sizeof(mock_write_sizes));
+	memset(&mock_expiry, 0, sizeof(mock_expiry));
+	mock_expiry_ret = 0;
 }
 
 static struct gps_assist_data make_test_data(void)
@@ -524,6 +537,77 @@ static void test_selective_inject_all_flags(void)
 out:;
 }
 
+static void test_expiry_nothing_expired(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	TEST("expiry: nothing expired -> 0 writes");
+	mock_reset();
+
+	/* All expiry times > 0, no data_flags -> nothing to do */
+	mock_expiry.data_flags = 0;
+	mock_expiry.utc_expiry = 120;
+	mock_expiry.klob_expiry = 120;
+	mock_expiry.sv_count = 1;
+	mock_expiry.sv[0].sv_id = 1;
+	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	mock_expiry.sv[0].ephe_expiry = 60;  /* 60 min remaining */
+
+	int rc = gps_assist_check_expiry(&d);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 0);
+	PASS();
+	return;
+out:;
+}
+
+static void test_expiry_utc_and_eph(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_sv = 2;
+	d.sv[1] = d.sv[0];
+	d.sv[1].prn = 15;
+
+	TEST("expiry: UTC + 1 eph expired -> 2 writes");
+	mock_reset();
+
+	/* UTC expired via data_flags, PRN 15 ephemeris expired */
+	mock_expiry.data_flags = NRF_MODEM_GNSS_AGNSS_GPS_UTC_REQUEST;
+	mock_expiry.sv_count = 2;
+	mock_expiry.sv[0].sv_id = 1;
+	mock_expiry.sv[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	mock_expiry.sv[0].ephe_expiry = 30;   /* still valid */
+	mock_expiry.sv[1].sv_id = 15;
+	mock_expiry.sv[1].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	mock_expiry.sv[1].ephe_expiry = 0;    /* expired */
+
+	int rc = gps_assist_check_expiry(&d);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 2);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	PASS();
+	return;
+out:;
+}
+
+static void test_expiry_get_failure(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	TEST("expiry: expiry_get fails -> propagate error");
+	mock_reset();
+	mock_expiry_ret = -1;
+
+	int rc = gps_assist_check_expiry(&d);
+	ASSERT_INT_EQ(rc, -1);
+	ASSERT_INT_EQ(mock_write_count, 0);
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -546,6 +630,9 @@ int main(void)
 	test_selective_inject_utc_only();
 	test_selective_inject_eph_mask();
 	test_selective_inject_all_flags();
+	test_expiry_nothing_expired();
+	test_expiry_utc_and_eph();
+	test_expiry_get_failure();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

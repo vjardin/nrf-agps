@@ -304,6 +304,45 @@ int gps_assist_inject(const struct gps_assist_data *data)
 	return 0;
 }
 
+int gps_assist_check_expiry(const struct gps_assist_data *data)
+{
+	struct nrf_modem_gnss_agnss_expiry exp;
+	int32_t ret;
+
+	ret = nrf_modem_gnss_agnss_expiry_get(&exp);
+	if (ret)
+		return (int)ret;
+
+	/* Build a selective request from expiry info */
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.data_flags = exp.data_flags;
+
+	/* Collect expired ephemeris SVs into a bitmask */
+	uint64_t ephe_mask = 0;
+
+	for (int i = 0; i < exp.sv_count; i++) {
+		if (exp.sv[i].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
+			continue;
+		if (exp.sv[i].ephe_expiry == 0 &&
+		    exp.sv[i].sv_id >= 1 && exp.sv[i].sv_id <= 32)
+			ephe_mask |= (uint64_t)1 << (exp.sv[i].sv_id - 1);
+	}
+
+	if (ephe_mask) {
+		req.system_count = 1;
+		req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+		req.system[0].sv_mask_ephe = ephe_mask;
+	}
+
+	/* Nothing to do */
+	if (!req.data_flags && !ephe_mask)
+		return 0;
+
+	return gps_assist_inject_from_request(data, &req);
+}
+
 int gps_assist_inject_from_request(const struct gps_assist_data *data,
 				   const struct nrf_modem_gnss_agnss_data_frame *req)
 {
