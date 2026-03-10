@@ -187,6 +187,52 @@ static void convert_location(const struct gps_location *src,
 	dst->confidence    = 68;   /* ~1 sigma */
 }
 
+int gps_assist_inject_ephemeris(const struct gps_assist_data *data,
+				uint8_t prn)
+{
+	for (int i = 0; i < data->num_sv; i++) {
+		if (data->sv[i].prn == prn) {
+			struct nrf_modem_gnss_agnss_gps_data_ephemeris eph;
+
+			convert_ephemeris(&data->sv[i], &eph);
+			return (int)nrf_modem_gnss_agnss_write(
+				&eph, sizeof(eph),
+				NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+		}
+	}
+	return 0;  /* PRN not in dataset, not an error */
+}
+
+int gps_assist_inject_utc(const struct gps_assist_data *data)
+{
+	struct nrf_modem_gnss_agnss_gps_data_utc utc;
+
+	convert_utc(&data->utc, &utc);
+	return (int)nrf_modem_gnss_agnss_write(
+		&utc, sizeof(utc),
+		NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+}
+
+int gps_assist_inject_klobuchar(const struct gps_assist_data *data)
+{
+	struct nrf_modem_gnss_agnss_data_klobuchar iono;
+
+	convert_iono(&data->iono, &iono);
+	return (int)nrf_modem_gnss_agnss_write(
+		&iono, sizeof(iono),
+		NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+}
+
+int gps_assist_inject_system_time(const struct gps_assist_data *data)
+{
+	struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow st;
+
+	convert_system_time(data, &st);
+	return (int)nrf_modem_gnss_agnss_write(
+		&st, sizeof(st),
+		NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
+}
+
 int gps_assist_inject_location(const struct gps_assist_data *data)
 {
 	struct nrf_modem_gnss_agnss_data_location loc;
@@ -251,6 +297,54 @@ int gps_assist_inject(const struct gps_assist_data *data)
 		err = (int)nrf_modem_gnss_agnss_write(
 			&loc, sizeof(loc),
 			NRF_MODEM_GNSS_AGNSS_LOCATION);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+int gps_assist_inject_from_request(const struct gps_assist_data *data,
+				   const struct nrf_modem_gnss_agnss_data_frame *req)
+{
+	int err;
+
+	/* Per-SV ephemeris injection based on request bitmask */
+	for (int s = 0; s < req->system_count; s++) {
+		if (req->system[s].system_id != NRF_MODEM_GNSS_SYSTEM_GPS)
+			continue;
+
+		uint64_t mask = req->system[s].sv_mask_ephe;
+
+		for (int prn = 1; prn <= 32; prn++) {
+			if (!(mask & ((uint64_t)1 << (prn - 1))))
+				continue;
+			err = gps_assist_inject_ephemeris(data, (uint8_t)prn);
+			if (err)
+				return err;
+		}
+	}
+
+	if (req->data_flags & NRF_MODEM_GNSS_AGNSS_GPS_UTC_REQUEST) {
+		err = gps_assist_inject_utc(data);
+		if (err)
+			return err;
+	}
+
+	if (req->data_flags & NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_REQUEST) {
+		err = gps_assist_inject_klobuchar(data);
+		if (err)
+			return err;
+	}
+
+	if (req->data_flags & NRF_MODEM_GNSS_AGNSS_GPS_SYS_TIME_AND_SV_TOW_REQUEST) {
+		err = gps_assist_inject_system_time(data);
+		if (err)
+			return err;
+	}
+
+	if (req->data_flags & NRF_MODEM_GNSS_AGNSS_POSITION_REQUEST) {
+		err = gps_assist_inject_location(data);
 		if (err)
 			return err;
 	}

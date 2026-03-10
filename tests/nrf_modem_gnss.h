@@ -11,10 +11,18 @@
 
 #include <stdint.h>
 
+#define NRF_MODEM_GNSS_MAX_SYSTEMS 4
+
+#define NRF_MODEM_GNSS_SYSTEM_INVALID 0
+#define NRF_MODEM_GNSS_SYSTEM_GPS     1
+#define NRF_MODEM_GNSS_SYSTEM_QZSS    3
+
 /* A-GNSS data type enumerator (nrf_modem_gnss_agnss_write type param) */
 #define NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS               1
 #define NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES                   2
+#define NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC                       3
 #define NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION  4
+#define NRF_MODEM_GNSS_AGNSS_NEQUICK_IONOSPHERIC_CORRECTION    5
 
 /*
  * GPS ICD scaled-integer structs (IS-GPS-200).
@@ -74,6 +82,7 @@ struct nrf_modem_gnss_agnss_data_klobuchar {
 
 #define NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS         6
 #define NRF_MODEM_GNSS_AGNSS_LOCATION                          7
+#define NRF_MODEM_GNSS_AGNSS_INTEGRITY                         9
 
 #define NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW 32
 
@@ -91,6 +100,14 @@ struct nrf_modem_gnss_agnss_gps_data_system_time_and_sv_tow {
 		sv_tow[NRF_MODEM_GNSS_AGNSS_GPS_MAX_SV_TOW];
 };
 
+/* A-GNSS data request bitmask values */
+#define NRF_MODEM_GNSS_AGNSS_GPS_UTC_REQUEST                   0x01
+#define NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_REQUEST                 0x02
+#define NRF_MODEM_GNSS_AGNSS_NEQUICK_REQUEST                   0x04
+#define NRF_MODEM_GNSS_AGNSS_GPS_SYS_TIME_AND_SV_TOW_REQUEST  0x08
+#define NRF_MODEM_GNSS_AGNSS_POSITION_REQUEST                  0x10
+#define NRF_MODEM_GNSS_AGNSS_INTEGRITY_REQUEST                 0x20
+
 struct nrf_modem_gnss_agnss_data_location {
 	int32_t  latitude;       /* coded: N <= (2^23/90) * deg */
 	int32_t  longitude;      /* coded: N <= (2^24/360) * deg */
@@ -100,6 +117,18 @@ struct nrf_modem_gnss_agnss_data_location {
 	uint8_t  orientation_major; /* degrees 0..179 */
 	uint8_t  unc_altitude;   /* 0..127, 255=invalid altitude */
 	uint8_t  confidence;     /* percent 0..128, 0=no info */
+};
+
+struct nrf_modem_gnss_agnss_system_data_need {
+	uint8_t  system_id;
+	uint64_t sv_mask_ephe;
+	uint64_t sv_mask_alm;
+};
+
+struct nrf_modem_gnss_agnss_data_frame {
+	uint32_t data_flags;
+	uint8_t  system_count;
+	struct nrf_modem_gnss_agnss_system_data_need system[NRF_MODEM_GNSS_MAX_SYSTEMS];
 };
 
 /*

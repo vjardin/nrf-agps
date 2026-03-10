@@ -9,6 +9,7 @@
  */
 #pragma once
 
+#include <nrf_modem_gnss.h>
 #include "gps_assist.h"
 
 /*
@@ -21,6 +22,21 @@
 int gps_assist_inject(const struct gps_assist_data *data);
 
 /*
- * Per-type injection function for fine-grained control.
+ * Selective injection: only inject what the modem requests.
+ * Pass the agnss_data_frame obtained from nrf_modem_gnss_read()
+ * after an NRF_MODEM_GNSS_EVT_AGNSS_REQ event.
+ *
+ * Returns 0 on success, negative errno on failure.
  */
+int gps_assist_inject_from_request(const struct gps_assist_data *data,
+				   const struct nrf_modem_gnss_agnss_data_frame *req);
+
+/*
+ * Per-type injection functions for fine-grained control.
+ */
+int gps_assist_inject_ephemeris(const struct gps_assist_data *data,
+				uint8_t prn);
+int gps_assist_inject_utc(const struct gps_assist_data *data);
+int gps_assist_inject_klobuchar(const struct gps_assist_data *data);
+int gps_assist_inject_system_time(const struct gps_assist_data *data);
 int gps_assist_inject_location(const struct gps_assist_data *data);

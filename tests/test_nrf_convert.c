@@ -443,6 +443,87 @@ static void test_convert_location(void)
 out:;
 }
 
+static void test_selective_inject_utc_only(void)
+{
+	struct gps_assist_data d = make_test_data();
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.data_flags = NRF_MODEM_GNSS_AGNSS_GPS_UTC_REQUEST;
+	req.system_count = 0;
+
+	TEST("selective: UTC only -> 1 call");
+	mock_reset();
+	int rc = gps_assist_inject_from_request(&d, &req);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	PASS();
+	return;
+out:;
+}
+
+static void test_selective_inject_eph_mask(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_sv = 2;
+	d.sv[1] = d.sv[0];
+	d.sv[1].prn = 15;
+
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.system_count = 1;
+	req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	/* Request only PRN 15 (bit 14) */
+	req.system[0].sv_mask_ephe = (uint64_t)1 << 14;
+
+	TEST("selective: 1 of 2 ephe by mask -> 1 call");
+	mock_reset();
+	int rc = gps_assist_inject_from_request(&d, &req);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 1);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	PASS();
+	return;
+out:;
+}
+
+static void test_selective_inject_all_flags(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.location.latitude  = 48.8566;
+	d.location.longitude = 2.3522;
+	d.location.valid     = 1;
+
+	struct nrf_modem_gnss_agnss_data_frame req;
+
+	memset(&req, 0, sizeof(req));
+	req.data_flags = NRF_MODEM_GNSS_AGNSS_GPS_UTC_REQUEST
+		       | NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_REQUEST
+		       | NRF_MODEM_GNSS_AGNSS_GPS_SYS_TIME_AND_SV_TOW_REQUEST
+		       | NRF_MODEM_GNSS_AGNSS_POSITION_REQUEST;
+	req.system_count = 1;
+	req.system[0].system_id = NRF_MODEM_GNSS_SYSTEM_GPS;
+	req.system[0].sv_mask_ephe = (uint64_t)1 << 0;  /* PRN 1 */
+
+	TEST("selective: all flags + 1 eph -> 5 calls");
+	mock_reset();
+	int rc = gps_assist_inject_from_request(&d, &req);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_write_count, 5);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS);
+	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_LOCATION);
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -462,6 +543,9 @@ int main(void)
 	test_inject_with_location();
 	test_convert_system_time();
 	test_convert_location();
+	test_selective_inject_utc_only();
+	test_selective_inject_eph_mask();
+	test_selective_inject_all_flags();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

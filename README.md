@@ -83,8 +83,29 @@ if (err) {
 ```
 
 The `gps_assist_inject()` function calls `nrf_modem_gnss_agnss_write()`
-for each satellite ephemeris, the Klobuchar ionospheric model, and the
-UTC parameters.
+for each satellite ephemeris, the Klobuchar ionospheric model, UTC
+parameters, system time, and location (if valid).
+
+### Callback-driven selective injection
+
+For production firmware, prefer `gps_assist_inject_from_request()` which
+only injects what the modem actually needs:
+
+```c
+static void gnss_event_handler(int event)
+{
+    if (event == NRF_MODEM_GNSS_EVT_AGNSS_REQ) {
+        struct nrf_modem_gnss_agnss_data_frame req;
+        nrf_modem_gnss_read(&req, sizeof(req),
+                            NRF_MODEM_GNSS_DATA_AGNSS_REQ);
+        gps_assist_inject_from_request(&gps_assist, &req);
+    }
+}
+```
+
+Per-type injection functions (`gps_assist_inject_ephemeris()`,
+`gps_assist_inject_utc()`, etc.) are also available for fine-grained
+control.
 
 ## Why this should work for the nRF9151
 
