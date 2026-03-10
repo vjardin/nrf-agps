@@ -14,6 +14,7 @@
 #include "gps_assist.h"
 #include "rinex.h"
 #include "codegen.h"
+#include "almanac.h"
 
 static int day_of_year(int year, int month, int day)
 {
@@ -42,6 +43,8 @@ static void usage(const char *prog)
 		"  -u URL         Custom RINEX navigation file URL\n"
 		"  -l LAT,LON    Approximate reference location (default: Paris Notre Dame)\n"
 		"  -f FILE        Parse local RINEX file instead of downloading\n"
+		"  -a MODE        Almanac source: derived (default), sem (download),\n"
+		"                 sem:FILE, yuma:FILE\n"
 		"  -h             Show this help\n",
 		prog);
 }
@@ -52,12 +55,16 @@ int main(int argc, char **argv)
 	const char *output = "gps_assist_data";
 	const char *url = NULL;
 	const char *local_file = NULL;
+	const char *alm_mode = "derived";
 	double ref_lat = 48.8530;   /* Paris Notre Dame */
 	double ref_lon = 2.3498;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "d:l:o:u:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "a:d:l:o:u:f:h")) != -1) {
 		switch (opt) {
+		case 'a':
+			alm_mode = optarg;
+			break;
 		case 'd':
 			if (sscanf(optarg, "%d-%d-%d",
 				   &year, &month, &day) != 3) {
@@ -161,6 +168,32 @@ int main(int argc, char **argv)
 	data.location.longitude = ref_lon;
 	data.location.altitude  = 0;
 	data.location.valid     = 1;
+
+	/* Load almanac data if requested */
+	if (strcmp(alm_mode, "derived") != 0) {
+		int alm_err = 0;
+
+		if (strcmp(alm_mode, "sem") == 0) {
+			alm_err = almanac_download_sem(&data);
+		} else if (strncmp(alm_mode, "sem:", 4) == 0) {
+			alm_err = almanac_parse_sem(alm_mode + 4, &data);
+		} else if (strncmp(alm_mode, "yuma:", 5) == 0) {
+			alm_err = almanac_parse_yuma(alm_mode + 5, &data);
+		} else {
+			fprintf(stderr, "Unknown almanac mode: %s\n",
+				alm_mode);
+			usage(argv[0]);
+			alm_err = -1;
+		}
+		if (alm_err) {
+			fprintf(stderr, "Failed to load almanac\n");
+			if (!local_file)
+				remove(path);
+			free(path);
+			curl_global_cleanup();
+			return 1;
+		}
+	}
 
 	/* Generate C source */
 	const char *source = strrchr(path, '/');

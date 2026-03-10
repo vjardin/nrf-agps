@@ -29,8 +29,23 @@ Options:
   -o PREFIX      Output file prefix (default: gps_assist_data)
   -u URL         Custom RINEX navigation file URL
   -f FILE        Parse local RINEX file instead of downloading
+  -a MODE        Almanac source (see below)
   -h             Show this help
 ```
+
+### Almanac modes (`-a`)
+
+| Mode | Description |
+|------|-------------|
+| `derived` | (default) Derive almanac from ephemeris data |
+| `sem` | Download current SEM almanac from USCG NAVCEN |
+| `sem:FILE` | Parse a local SEM almanac file (.al3) |
+| `yuma:FILE` | Parse a local YUMA almanac file |
+
+When a parsed almanac is available (SEM/YUMA), it is preferred over
+ephemeris-derived data during injection. The fallback to derived almanac
+is per-PRN: if a PRN has no parsed almanac but has an ephemeris, the
+derived almanac is used.
 
 ### Examples
 
@@ -49,6 +64,15 @@ Options:
 
 # Override default location (e.g. Berlin)
 ./rinex_dl -l 52.5200,13.4050
+
+# Download SEM almanac from NAVCEN instead of deriving from ephemeris
+./rinex_dl -a sem
+
+# Use a local SEM almanac file
+./rinex_dl -a sem:/path/to/current_sem.al3
+
+# Use a local YUMA almanac file
+./rinex_dl -a yuma:/path/to/almanac.yuma
 ```
 
 The tool downloads the combined BRDC navigation file from
@@ -164,7 +188,7 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 | Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
 | UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
 | GPS system time | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS` | Generation timestamp |
-| Almanac (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC` | Derived from ephemeris |
+| Almanac (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC` | SEM/YUMA or derived from ephemeris |
 | Location | `NRF_MODEM_GNSS_AGNSS_LOCATION` | Optional `-l LAT,LON` hint |
 
 ## Tests
@@ -205,6 +229,15 @@ Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
   af0/af1 (2^-31/2^-43), M0 (2^-31 semi-circles), eccentricity (2^-33),
   sqrt_A (2^-19), Crc/Crs (2^-5), Klobuchar alpha/beta, UTC A0/tot
 - Multi-satellite injection (N ephemerides + 1 iono + 1 UTC)
+- Parsed almanac preference over derived (ioda verification)
+
+### test_almanac
+
+Tests the SEM and YUMA almanac parsers using embedded fixture data:
+
+- SEM: correct entry count, PRN, week/toa, all orbital fields
+- YUMA: correct entry count, PRN, radians-to-semi-circles conversion
+- YUMA/SEM agreement: matching dimensionless/time fields across formats
 
 ## Limitations
 

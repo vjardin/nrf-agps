@@ -65,14 +65,21 @@ static int mock_write_count;
 static uint16_t mock_write_types[64];
 static int32_t  mock_write_sizes[64];
 
+static struct nrf_modem_gnss_agnss_gps_data_almanac mock_last_alm;
+static int mock_alm_count;
+
 int32_t nrf_modem_gnss_agnss_write(void *buf, int32_t buf_len,
 				   uint16_t type)
 {
-	(void)buf;
 	if (mock_write_count < 64) {
 		mock_write_types[mock_write_count] = type;
 		mock_write_sizes[mock_write_count] = buf_len;
 		mock_write_count++;
+	}
+	if (type == NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC &&
+	    buf_len == (int32_t)sizeof(struct nrf_modem_gnss_agnss_gps_data_almanac)) {
+		memcpy(&mock_last_alm, buf, sizeof(mock_last_alm));
+		mock_alm_count++;
 	}
 	return 0;
 }
@@ -95,6 +102,8 @@ static void mock_reset(void)
 	memset(mock_write_sizes, 0, sizeof(mock_write_sizes));
 	memset(&mock_expiry, 0, sizeof(mock_expiry));
 	mock_expiry_ret = 0;
+	memset(&mock_last_alm, 0, sizeof(mock_last_alm));
+	mock_alm_count = 0;
 }
 
 static struct gps_assist_data make_test_data(void)
@@ -371,11 +380,11 @@ static void test_inject_multi_sv(void)
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
-	/* 2*(eph+alm) + 1 iono + 1 utc + 1 system_time = 7 */
+	/* 2 eph + 2 alm + 1 iono + 1 utc + 1 system_time = 7 */
 	ASSERT_INT_EQ(mock_write_count, 7);
 	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
-	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
 	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
 	ASSERT_INT_EQ(mock_write_types[4], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
 	ASSERT_INT_EQ(mock_write_types[5], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
@@ -707,6 +716,72 @@ static void test_expiry_alm_expired(void)
 out:;
 }
 
+static void test_inject_prefer_parsed_almanac(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	/* Add a parsed almanac with distinct ioda to prove preference */
+	d.num_alm = 1;
+	d.alm[0].prn       = 1;
+	d.alm[0].health    = 0;
+	d.alm[0].ioda      = 2;
+	d.alm[0].week      = 2409;
+	d.alm[0].toa       = 405504;
+	d.alm[0].e         = 5.0e-03;
+	d.alm[0].delta_i   = 1.5e-02;
+	d.alm[0].omega_dot = -8.0e-09;
+	d.alm[0].sqrt_a    = 5.1536e+03;
+	d.alm[0].omega0    = 9.5e-01;
+	d.alm[0].omega     = 5.0e-02;
+	d.alm[0].m0        = -2.5e-01;
+	d.alm[0].af0       = 1.0e-04;
+	d.alm[0].af1       = -5.0e-12;
+
+	TEST("inject: prefer parsed almanac over derived (ioda check)");
+	mock_reset();
+	int rc = gps_assist_inject_almanac(&d, 1);
+	ASSERT_INT_EQ(rc, 0);
+	ASSERT_INT_EQ(mock_alm_count, 1);
+	/* ioda=2 proves parsed path was used (derived gives 0) */
+	ASSERT_INT_EQ(mock_last_alm.ioda, 2);
+	PASS();
+	return;
+out:;
+}
+
+static void test_inject_parsed_alm_in_full(void)
+{
+	struct gps_assist_data d = make_test_data();
+
+	d.num_alm = 1;
+	d.alm[0].prn       = 1;
+	d.alm[0].health    = 0;
+	d.alm[0].ioda      = 3;
+	d.alm[0].week      = 2409;
+	d.alm[0].toa       = 405504;
+	d.alm[0].e         = 5.0e-03;
+	d.alm[0].delta_i   = 1.5e-02;
+	d.alm[0].omega_dot = -8.0e-09;
+	d.alm[0].sqrt_a    = 5.1536e+03;
+	d.alm[0].omega0    = 9.5e-01;
+	d.alm[0].omega     = 5.0e-02;
+	d.alm[0].m0        = -2.5e-01;
+	d.alm[0].af0       = 1.0e-04;
+	d.alm[0].af1       = -5.0e-12;
+
+	TEST("inject: full inject uses parsed almanac (ioda=3)");
+	mock_reset();
+	int rc = gps_assist_inject(&d);
+	ASSERT_INT_EQ(rc, 0);
+	/* 1 eph + 1 alm(parsed) + iono + utc + systime = 5 */
+	ASSERT_INT_EQ(mock_write_count, 5);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+	ASSERT_INT_EQ(mock_last_alm.ioda, 3);
+	PASS();
+	return;
+out:;
+}
+
 int main(void)
 {
 	fprintf(stderr, "=== nRF conversion tests ===\n");
@@ -735,6 +810,8 @@ int main(void)
 	test_expiry_utc_and_eph();
 	test_expiry_alm_expired();
 	test_expiry_get_failure();
+	test_inject_prefer_parsed_almanac();
+	test_inject_parsed_alm_in_full();
 
 	fprintf(stderr, "\n%d/%d tests passed\n", tests_passed, tests_run);
 	return tests_passed == tests_run ? 0 : 1;

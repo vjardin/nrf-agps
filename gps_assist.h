@@ -72,6 +72,23 @@ struct gps_location {
 	uint8_t valid;      /* Non-zero if lat/lon are populated */
 };
 
+struct gps_almanac {
+	uint8_t  prn;       /* PRN number (1-32) */
+	uint8_t  health;    /* SV health (0 = healthy) */
+	uint8_t  ioda;      /* Issue of Data, Almanac (0-3) */
+	uint16_t week;      /* GPS week number */
+	uint32_t toa;       /* Time of applicability (s) */
+	double   e;         /* Eccentricity (dimensionless) */
+	double   delta_i;   /* Inclination offset from 0.3 sc (semi-circles) */
+	double   omega_dot; /* Rate of right ascension (sc/s) */
+	double   sqrt_a;    /* Square root of semi-major axis (m^0.5) */
+	double   omega0;    /* Longitude of ascending node (sc) */
+	double   omega;     /* Argument of perigee (sc) */
+	double   m0;        /* Mean anomaly (sc) */
+	double   af0;       /* Clock bias (s) */
+	double   af1;       /* Clock drift (s/s) */
+};
+
 struct gps_assist_data {
 	uint32_t           timestamp;            /* Unix time of generation */
 	uint16_t           gps_week;             /* Reference GPS week */
@@ -79,6 +96,8 @@ struct gps_assist_data {
 	struct gps_iono    iono;                 /* Ionospheric model */
 	struct gps_utc     utc;                  /* UTC parameters */
 	struct gps_location location;            /* Approximate reference location */
+	uint8_t            num_alm;             /* Number of parsed almanac entries */
+	struct gps_almanac alm[GPS_MAX_SATS];   /* Parsed almanac (SEM/YUMA) */
 	struct gps_ephemeris sv[GPS_MAX_SATS];   /* Satellite ephemerides */
 };
 

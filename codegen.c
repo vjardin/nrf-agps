@@ -9,6 +9,26 @@
 
 #include "codegen.h"
 
+static void emit_almanac(FILE *fp, const struct gps_almanac *alm)
+{
+	fprintf(fp, "\t\t{\n");
+	fprintf(fp, "\t\t\t.prn = %u,\n", alm->prn);
+	fprintf(fp, "\t\t\t.health = %u,\n", alm->health);
+	fprintf(fp, "\t\t\t.ioda = %u,\n", alm->ioda);
+	fprintf(fp, "\t\t\t.week = %u,\n", alm->week);
+	fprintf(fp, "\t\t\t.toa = %u,\n", alm->toa);
+	fprintf(fp, "\t\t\t.e = %.12e,\n", alm->e);
+	fprintf(fp, "\t\t\t.delta_i = %.12e,\n", alm->delta_i);
+	fprintf(fp, "\t\t\t.omega_dot = %.12e,\n", alm->omega_dot);
+	fprintf(fp, "\t\t\t.sqrt_a = %.12e,\n", alm->sqrt_a);
+	fprintf(fp, "\t\t\t.omega0 = %.12e,\n", alm->omega0);
+	fprintf(fp, "\t\t\t.omega = %.12e,\n", alm->omega);
+	fprintf(fp, "\t\t\t.m0 = %.12e,\n", alm->m0);
+	fprintf(fp, "\t\t\t.af0 = %.12e,\n", alm->af0);
+	fprintf(fp, "\t\t\t.af1 = %.12e,\n", alm->af1);
+	fprintf(fp, "\t\t},\n");
+}
+
 static void emit_ephemeris(FILE *fp, const struct gps_ephemeris *sv)
 {
 	fprintf(fp, "\t\t{\n");
@@ -105,6 +125,15 @@ int codegen_write(const char *prefix, const struct gps_assist_data *data,
 		fprintf(fp, "\t\t.longitude = %.4f,\n", data->location.longitude);
 		fprintf(fp, "\t\t.altitude = %d,\n", data->location.altitude);
 		fprintf(fp, "\t\t.valid = 1,\n");
+		fprintf(fp, "\t},\n");
+	}
+
+	/* Almanac entries (parsed SEM/YUMA) */
+	if (data->num_alm > 0) {
+		fprintf(fp, "\t.num_alm = %u,\n", data->num_alm);
+		fprintf(fp, "\t.alm = {\n");
+		for (int i = 0; i < data->num_alm; i++)
+			emit_almanac(fp, &data->alm[i]);
 		fprintf(fp, "\t},\n");
 	}
 

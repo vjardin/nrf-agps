@@ -241,9 +241,49 @@ static void convert_almanac(const struct gps_ephemeris *src, uint16_t week,
 	dst->af1       = (int16_t)round(src->af1 / 3.63797880709171295166e-12);               /* 2^-38 */
 }
 
+/*
+ * Convert a parsed almanac (native SEM/YUMA units: semi-circles) to nRF format.
+ * Unlike convert_almanac() which derives from ephemeris (radians), angular
+ * values here are already in semi-circles.
+ */
+static void convert_almanac_native(const struct gps_almanac *src,
+				   struct nrf_modem_gnss_agnss_gps_data_almanac *dst)
+{
+	memset(dst, 0, sizeof(*dst));
+
+	dst->sv_id     = src->prn;
+	dst->wn        = (uint8_t)(src->week & 0xFF);
+	dst->toa       = (uint8_t)(src->toa / 4096);
+	dst->ioda      = src->ioda;
+	dst->sv_health = src->health;
+
+	dst->e         = (uint16_t)round(src->e / 4.76837158203125e-07);                     /* 2^-21 */
+	dst->sqrt_a    = (uint32_t)round(src->sqrt_a / 4.88281250000000000000e-04);           /* 2^-11 */
+	dst->delta_i   = (int16_t)round(src->delta_i / 1.90734863281250000000e-06);           /* 2^-19 */
+	dst->omega_dot = (int16_t)round(src->omega_dot / 3.63797880709171295166e-12);         /* 2^-38 */
+	dst->omega0    = (int32_t)round(src->omega0 / 1.19209289550781250000e-07);            /* 2^-23 */
+	dst->w         = (int32_t)round(src->omega / 1.19209289550781250000e-07);             /* 2^-23 */
+	dst->m0        = (int32_t)round(src->m0 / 1.19209289550781250000e-07);                /* 2^-23 */
+	dst->af0       = (int16_t)round(src->af0 / 9.53674316406250000000e-07);               /* 2^-20 */
+	dst->af1       = (int16_t)round(src->af1 / 3.63797880709171295166e-12);               /* 2^-38 */
+}
+
 int gps_assist_inject_almanac(const struct gps_assist_data *data,
 			      uint8_t prn)
 {
+	/* Prefer parsed almanac data */
+	for (int i = 0; i < data->num_alm; i++) {
+		if (data->alm[i].prn == prn) {
+			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+			convert_almanac_native(&data->alm[i], &alm);
+			return (int)nrf_modem_gnss_agnss_write(
+				&alm, sizeof(alm),
+				NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+		}
+	}
+
+	/* Fall back to derived from ephemeris */
 	for (int i = 0; i < data->num_sv; i++) {
 		if (data->sv[i].prn == prn) {
 			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
@@ -317,7 +357,7 @@ int gps_assist_inject(const struct gps_assist_data *data)
 {
 	int err;
 
-	/* Inject ephemerides and almanacs */
+	/* Inject ephemerides */
 	for (int i = 0; i < data->num_sv; i++) {
 		struct nrf_modem_gnss_agnss_gps_data_ephemeris eph;
 
@@ -327,15 +367,31 @@ int gps_assist_inject(const struct gps_assist_data *data)
 			NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
 		if (err)
 			return err;
+	}
 
-		struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+	/* Inject almanacs: prefer parsed, else derive from ephemeris */
+	if (data->num_alm > 0) {
+		for (int i = 0; i < data->num_alm; i++) {
+			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
 
-		convert_almanac(&data->sv[i], data->gps_week, &alm);
-		err = (int)nrf_modem_gnss_agnss_write(
-			&alm, sizeof(alm),
-			NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
-		if (err)
-			return err;
+			convert_almanac_native(&data->alm[i], &alm);
+			err = (int)nrf_modem_gnss_agnss_write(
+				&alm, sizeof(alm),
+				NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+			if (err)
+				return err;
+		}
+	} else {
+		for (int i = 0; i < data->num_sv; i++) {
+			struct nrf_modem_gnss_agnss_gps_data_almanac alm;
+
+			convert_almanac(&data->sv[i], data->gps_week, &alm);
+			err = (int)nrf_modem_gnss_agnss_write(
+				&alm, sizeof(alm),
+				NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC);
+			if (err)
+				return err;
+		}
 	}
 
 	/* Inject ionospheric correction */
