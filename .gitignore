@@ -1,0 +1,10 @@
+# Build artifacts
+*.o
+rinex_dl
+
+# Generated source
+gps_assist_data.c
+
+# Test binaries
+tests/test_rinex
+tests/test_nrf_convert
