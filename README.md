@@ -35,12 +35,12 @@ Options:
 
 ### Almanac modes (`-a`)
 
-| Mode | Description |
-|------|-------------|
-| `derived` | (default) Derive almanac from ephemeris data |
-| `sem` | Download current SEM almanac from USCG NAVCEN |
-| `sem:FILE` | Parse a local SEM almanac file (.al3) |
-| `yuma:FILE` | Parse a local YUMA almanac file |
+| Mode        | Description                                  |
+|-------------|----------------------------------------------|
+| `derived`   | (default) Derive almanac from ephemeris data |
+| `sem`       | Download current SEM almanac from USCG NAVCEN|
+| `sem:FILE`  | Parse a local SEM almanac file (.al3)        |
+| `yuma:FILE` | Parse a local YUMA almanac file              |
 
 When a parsed almanac is available (SEM/YUMA), it is preferred over
 ephemeris-derived data during injection. The fallback to derived almanac
@@ -91,12 +91,12 @@ parses GPS satellite records, and writes `gps_assist_data.c`.
 
 Copy these files into your Zephyr project `src/` directory:
 
-| File | Role |
-|------|------|
-| `gps_assist.h` | Struct definitions (portable, no Zephyr dependency) |
-| `gps_assist_nrf.h` | Injection API declaration |
-| `gps_assist_nrf.c` | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agnss_write()` |
-| `gps_assist_data.c` | Generated — const ephemeris, iono, UTC data |
+| File                | Role                                                                     |
+|---------------------|--------------------------------------------------------------------------|
+| `gps_assist.h`      | Struct definitions (portable, no Zephyr dependency)                      |
+| `gps_assist_nrf.h`  | Injection API declaration                                                |
+| `gps_assist_nrf.c`  | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agnss_write()` |
+| `gps_assist_data.c` | Generated — const ephemeris, iono, UTC data                              |
 
 In your firmware, after modem initialisation and before starting a GNSS fix:
 
@@ -163,11 +163,11 @@ RINEX broadcast navigation files (BRDC) are an ASCII dump of exactly
 these navigation messages, collected by worldwide IGS ground stations.
 The data content is identical; only the container format differs:
 
-| | Over the air | SUPL/LPP (cellular) | This tool |
-|---|---|---|---|
-| Data content | GPS nav subframes | GPS nav subframes | GPS nav subframes |
-| Container | L1 C/A signal | ASN.1/LPP over LTE | RINEX → C source |
-| Delivery | RF broadcast | Network-assisted | Compile-time |
+|              | Over the air      | SUPL/LPP (cellular) | This tool         |
+|--------------|-------------------|---------------------|-------------------|
+| Data content | GPS nav subframes | GPS nav subframes   | GPS nav subframes |
+| Container    | L1 C/A signal     | ASN.1/LPP over LTE | RINEX → C source  |
+| Delivery     | RF broadcast      | Network-assisted    | Compile-time      |
 
 The conversion path is:
 
@@ -182,14 +182,14 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 
 ### What assistance data is provided
 
-| Type | nRF modem constant | Source |
-|------|-------------------|--------|
-| Ephemeris (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES` | RINEX nav records |
-| Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
-| UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
-| GPS system time | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS` | Generation timestamp |
-| Almanac (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC` | SEM/YUMA or derived from ephemeris |
-| Location | `NRF_MODEM_GNSS_AGNSS_LOCATION` | Optional `-l LAT,LON` hint |
+| Type               | nRF modem constant                                      | Source                             |
+|--------------------|---------------------------------------------------------|------------------------------------|
+| Ephemeris (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES`                  | RINEX nav records                  |
+| Klobuchar iono     | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB`        |
+| UTC parameters     | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS`               | RINEX header `GPUT`                |
+| GPS system time    | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS`        | Generation timestamp               |
+| Almanac (per SV)   | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC`                      | SEM/YUMA or derived from ephemeris |
+| Location           | `NRF_MODEM_GNSS_AGNSS_LOCATION`                         | Optional `-l LAT,LON` hint         |
 
 ## Tests
 
