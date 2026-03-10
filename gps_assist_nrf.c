@@ -27,6 +27,15 @@
 #define GPS_EPOCH_UNIX 315964800L
 #define GPS_LEAP_SECONDS 18
 
+/*
+ * Default Issue of Data, Almanac.  IODA is a 2-bit field (0-3)
+ * broadcast in GPS subframes 4/5 that identifies the almanac dataset
+ * version.  RINEX broadcast files do not carry this value, so we
+ * default to 0.  The nRF modem does not validate IODA against the
+ * live broadcast, so this is safe for injected assistance data.
+ */
+#define GPS_ALMANAC_IODA_DEFAULT 0
+
 static inline double rad2sc(double rad)
 {
 	return rad / M_PI;
@@ -213,7 +222,7 @@ static void convert_almanac(const struct gps_ephemeris *src, uint16_t week,
 	dst->sv_id     = src->prn;
 	dst->wn        = (uint8_t)(week & 0xFF);
 	dst->toa       = (uint8_t)(src->toe / 4096);
-	dst->ioda      = 0;
+	dst->ioda      = GPS_ALMANAC_IODA_DEFAULT;
 	dst->sv_health = src->health;
 
 	dst->e         = (uint16_t)round(src->e / 4.76837158203125e-07);                     /* 2^-21 */
