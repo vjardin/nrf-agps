@@ -1,7 +1,7 @@
 /*
  * test_nrf_convert.c - GPS ICD conversion tests for nRF modem helpers
  *
- * Tests the double → scaled-integer conversion against known values
+ * Tests the double -> scaled-integer conversion against known values
  * and verifies round-trip accuracy within LSB tolerance.
  *
  * Compiles gps_assist_nrf.c against a mock nrf_modem_gnss.h so the
@@ -64,8 +64,8 @@ static int mock_write_count;
 static uint16_t mock_write_types[64];
 static int32_t  mock_write_sizes[64];
 
-int nrf_modem_gnss_agps_write(const void *buf, int32_t buf_len,
-			      uint16_t type)
+int32_t nrf_modem_gnss_agnss_write(void *buf, int32_t buf_len,
+				   uint16_t type)
 {
 	(void)buf;
 	if (mock_write_count < 64) {
@@ -142,7 +142,7 @@ static void test_inject_call_count(void)
 {
 	struct gps_assist_data d = make_test_data();
 
-	TEST("inject: correct number of agps_write calls");
+	TEST("inject: correct number of agnss_write calls");
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
@@ -157,12 +157,12 @@ static void test_inject_call_types(void)
 {
 	struct gps_assist_data d = make_test_data();
 
-	TEST("inject: correct agps_write type constants");
+	TEST("inject: correct agnss_write type constants");
 	mock_reset();
 	gps_assist_inject(&d);
-	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGPS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGPS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
-	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGPS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
 	PASS();
 	return;
 out:;
@@ -175,41 +175,20 @@ static void test_inject_call_sizes(void)
 	TEST("inject: correct buffer sizes");
 	mock_reset();
 	gps_assist_inject(&d);
-	ASSERT_INT_EQ(mock_write_sizes[0], (int)sizeof(struct nrf_modem_gnss_agps_data_ephemeris));
-	ASSERT_INT_EQ(mock_write_sizes[1], (int)sizeof(struct nrf_modem_gnss_agps_data_klobuchar));
-	ASSERT_INT_EQ(mock_write_sizes[2], (int)sizeof(struct nrf_modem_gnss_agps_data_utc));
+	ASSERT_INT_EQ(mock_write_sizes[0], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_ephemeris));
+	ASSERT_INT_EQ(mock_write_sizes[1], (int)sizeof(struct nrf_modem_gnss_agnss_data_klobuchar));
+	ASSERT_INT_EQ(mock_write_sizes[2], (int)sizeof(struct nrf_modem_gnss_agnss_gps_data_utc));
 	PASS();
 	return;
 out:;
 }
 
-/*
- * Round-trip test: double → GPS ICD integer → back to double.
- * The reconverted value must be within 1 LSB of the original.
- *
- * This validates that the scale factors in gps_assist_nrf.c are correct.
- */
-
-/*
- * Round-trip tests: double → GPS ICD integer → back to double.
- * The reconverted value must be within 1 LSB of the original.
- * This validates that the scale factors in gps_assist_nrf.c are correct.
- */
-
 static void test_convert_time(void)
 {
 	struct gps_assist_data d = make_test_data();
 
-	TEST("convert: toe and toc scaling (/ 16)");
+	TEST("convert: toe and toc scaling (2^4 = 16)");
 
-	/*
-	 * We can't directly access the converted struct from outside
-	 * gps_assist_nrf.c. But we know the formulas:
-	 *   toc_icd = toc / 16 = 86400 / 16 = 5400
-	 *   toe_icd = toe / 16 = 86400 / 16 = 5400
-	 *
-	 * Validate by round-trip: 5400 * 16 = 86400.
-	 */
 	uint16_t toc_icd = (uint16_t)(d.sv[0].toc / 16);
 	uint16_t toe_icd = (uint16_t)(d.sv[0].toe / 16);
 	ASSERT_INT_EQ(toc_icd, 5400);
@@ -230,13 +209,13 @@ static void test_convert_clock_roundtrip(void)
 	TEST("convert: af0/af1 round-trip within 1 LSB");
 
 	/* af0: scale = 2^-31 */
-	double lsb_af0 = 9.31322574615478515625e-10;  /* 2^-31 */
+	double lsb_af0 = 9.31322574615478515625e-10;
 	int32_t af0_icd = (int32_t)round(af0 / lsb_af0);
 	double af0_back = af0_icd * lsb_af0;
 	ASSERT_DBL_NEAR(af0_back, af0, lsb_af0);
 
 	/* af1: scale = 2^-43 */
-	double lsb_af1 = 1.13686837721616029739e-13;  /* 2^-43 */
+	double lsb_af1 = 1.13686837721616029739e-13;
 	int16_t af1_icd = (int16_t)round(af1 / lsb_af1);
 	double af1_back = af1_icd * lsb_af1;
 	ASSERT_DBL_NEAR(af1_back, af1, lsb_af1);
@@ -251,7 +230,7 @@ static void test_convert_m0_roundtrip(void)
 	struct gps_assist_data d = make_test_data();
 	double m0_rad = d.sv[0].m0;
 
-	TEST("convert: M0 rad → semi-circles → ICD round-trip");
+	TEST("convert: M0 rad -> semi-circles -> ICD round-trip");
 
 	double lsb = 4.65661287307739257812e-10;  /* 2^-31 semi-circles */
 	double m0_sc = m0_rad / M_PI;
@@ -259,7 +238,6 @@ static void test_convert_m0_roundtrip(void)
 	double m0_sc_back = m0_icd * lsb;
 	double m0_rad_back = m0_sc_back * M_PI;
 
-	/* Tolerance: 1 LSB in radians = lsb * PI */
 	ASSERT_DBL_NEAR(m0_rad_back, m0_rad, lsb * M_PI);
 	PASS();
 	return;
@@ -324,13 +302,11 @@ static void test_convert_iono_roundtrip(void)
 
 	TEST("convert: Klobuchar iono alpha/beta round-trip");
 
-	/* alpha0: 2^-30 */
 	double lsb_a0 = 9.31322574615478515625e-10;
 	int8_t a0_icd = (int8_t)round(d.iono.alpha[0] / lsb_a0);
 	double a0_back = a0_icd * lsb_a0;
 	ASSERT_DBL_NEAR(a0_back, d.iono.alpha[0], lsb_a0);
 
-	/* beta0: 2^11 */
 	double lsb_b0 = 2048.0;
 	int8_t b0_icd = (int8_t)round(d.iono.beta[0] / lsb_b0);
 	double b0_back = b0_icd * lsb_b0;
@@ -347,17 +323,14 @@ static void test_convert_utc_roundtrip(void)
 
 	TEST("convert: UTC A0/A1/tot round-trip");
 
-	/* A0: 2^-30 */
 	double lsb_a0 = 9.31322574615478515625e-10;
 	int32_t a0_icd = (int32_t)round(d.utc.a0 / lsb_a0);
 	double a0_back = a0_icd * lsb_a0;
 	ASSERT_DBL_NEAR(a0_back, d.utc.a0, lsb_a0);
 
-	/* tot: 2^12 = 4096 */
 	uint8_t tot_icd = (uint8_t)(d.utc.tot / 4096);
 	ASSERT_INT_EQ(tot_icd * 4096, (int)d.utc.tot);
 
-	/* dt_ls: pass-through */
 	ASSERT_INT_EQ(d.utc.dt_ls, 18);
 
 	PASS();
@@ -369,21 +342,20 @@ static void test_inject_multi_sv(void)
 {
 	struct gps_assist_data d = make_test_data();
 
-	/* Add a second satellite */
 	d.num_sv = 2;
 	d.sv[1] = d.sv[0];
 	d.sv[1].prn = 15;
 
-	TEST("inject: 2 SVs → 4 agps_write calls");
+	TEST("inject: 2 SVs -> 4 agnss_write calls");
 	mock_reset();
 	int rc = gps_assist_inject(&d);
 	ASSERT_INT_EQ(rc, 0);
 	/* 2 ephemeris + 1 iono + 1 utc = 4 */
 	ASSERT_INT_EQ(mock_write_count, 4);
-	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGPS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGPS_GPS_EPHEMERIDES);
-	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGPS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
-	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGPS_GPS_UTC_PARAMETERS);
+	ASSERT_INT_EQ(mock_write_types[0], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[1], NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES);
+	ASSERT_INT_EQ(mock_write_types[2], NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION);
+	ASSERT_INT_EQ(mock_write_types[3], NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS);
 	PASS();
 	return;
 out:;

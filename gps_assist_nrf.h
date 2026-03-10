@@ -1,5 +1,5 @@
 /*
- * gps_assist_nrf.h - Inject pre-loaded A-GPS data into nRF modem GNSS
+ * gps_assist_nrf.h - Inject pre-loaded A-GNSS data into nRF modem GNSS
  *
  * Copy this file and gps_assist_nrf.c into your Zephyr project alongside
  * gps_assist.h and the generated gps_assist_data.c.
@@ -12,8 +12,9 @@
 #include "gps_assist.h"
 
 /*
- * Inject all assistance data (ephemerides, iono, UTC) into the nRF GNSS
- * modem. Call after nrf_modem_gnss_init() and before starting a fix.
+ * Inject all assistance data (ephemerides, iono, UTC) into the nRF
+ * GNSS modem via nrf_modem_gnss_agnss_write().
+ * Call after nrf_modem_gnss_init() and before starting a fix.
  *
  * Returns 0 on success, negative errno on failure.
  */

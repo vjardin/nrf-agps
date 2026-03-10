@@ -1,4 +1,4 @@
-# rinex_dl — Offline A-GPS data generator for nRF9151
+# rinex_dl — Offline A-GNSS data generator for nRF9151
 
 [![CI](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml/badge.svg)](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml)
 
@@ -67,7 +67,7 @@ Copy these files into your Zephyr project `src/` directory:
 |------|------|
 | `gps_assist.h` | Struct definitions (portable, no Zephyr dependency) |
 | `gps_assist_nrf.h` | Injection API declaration |
-| `gps_assist_nrf.c` | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agps_write()` |
+| `gps_assist_nrf.c` | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agnss_write()` |
 | `gps_assist_data.c` | Generated — const ephemeris, iono, UTC data |
 
 In your firmware, after modem initialisation and before starting a GNSS fix:
@@ -78,17 +78,17 @@ In your firmware, after modem initialisation and before starting a GNSS fix:
 
 int err = gps_assist_inject(&gps_assist);
 if (err) {
-    LOG_ERR("A-GPS injection failed: %d", err);
+    LOG_ERR("A-GNSS injection failed: %d", err);
 }
 ```
 
-The `gps_assist_inject()` function calls `nrf_modem_gnss_agps_write()`
+The `gps_assist_inject()` function calls `nrf_modem_gnss_agnss_write()`
 for each satellite ephemeris, the Klobuchar ionospheric model, and the
 UTC parameters.
 
 ## Why this should work for the nRF9151
 
-The nRF9151 modem exposes `nrf_modem_gnss_agps_write()` which accepts
+The nRF9151 modem exposes `nrf_modem_gnss_agnss_write()` which accepts
 assistance data in the standard GPS ICD format (IS-GPS-200). This is the
 same data that GPS satellites broadcast in their navigation message
 subframes — the orbital parameters (ephemeris), clock corrections,
@@ -108,7 +108,7 @@ The conversion path is:
 
 ```
 RINEX (doubles, radians) -> GPS ICD (scaled integers, semi-circles)
-                         -> nrf_modem_gnss_agps_write()
+                         -> nrf_modem_gnss_agnss_write()
 ```
 
 The scale factors used in `gps_assist_nrf.c` match IS-GPS-200
@@ -119,9 +119,9 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 
 | Type | nRF modem constant | Source |
 |------|-------------------|--------|
-| Ephemeris (per SV) | `NRF_MODEM_GNSS_AGPS_GPS_EPHEMERIDES` | RINEX nav records |
-| Klobuchar iono | `NRF_MODEM_GNSS_AGPS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
-| UTC parameters | `NRF_MODEM_GNSS_AGPS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
+| Ephemeris (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES` | RINEX nav records |
+| Klobuchar iono | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB` |
+| UTC parameters | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS` | RINEX header `GPUT` |
 
 ## Tests
 
@@ -154,7 +154,7 @@ ephemeris ranges (sqrt_A, eccentricity, toe).
 Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
 `tests/`) so `gps_assist_nrf.c` compiles on the build host. Verifies:
 
-- `nrf_modem_gnss_agps_write()` is called with correct types
+- `nrf_modem_gnss_agnss_write()` is called with correct types
   (`EPHEMERIDES`, `KLOBUCHAR`, `UTC`) and buffer sizes
 - Round-trip accuracy for all scaled-integer conversions (double ->
   GPS ICD integer -> double) within 1 LSB tolerance:
@@ -168,12 +168,12 @@ Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
 
 The nRF modem also benefits from:
 
-- Reference time (`NRF_MODEM_GNSS_AGPS_GPS_SYSTEM_CLOCK_AND_TOWS`) —
+- Reference time (`NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS`) —
   not provided. The modem can obtain time from the LTE network or an RTC or NTP.
-- Reference position (`NRF_MODEM_GNSS_AGPS_LOCATION`) — not
+- Reference position (`NRF_MODEM_GNSS_AGNSS_LOCATION`) — not
   provided. A rough hardcoded position could be added to further reduce
   TTFF (center of France ?).
-- Integrity data (`NRF_MODEM_GNSS_AGPS_INTEGRITY`) — TBD ?
+- Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) — TBD ?
 
 ### Compile-time data only
 
@@ -183,4 +183,4 @@ It is just for testing, then it can become a web service solution.
 
 Only GPS (constellation `G`) satellites are parsed. GLONASS, Galileo,
 and BeiDou records in the RINEX file are skipped. The nRF9151 modem
-primarily uses GPS for A-GPS assistance.
+primarily uses GPS for A-GNSS assistance.
