@@ -1,5 +1,7 @@
 # rinex_dl — Offline A-GPS data generator for nRF9151
 
+[![CI](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml/badge.svg)](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml)
+
 Downloads daily GPS broadcast ephemeris from public RINEX sources and
 generates a C file with satellite orbital parameters. The generated file
 is compiled and linked into a Zephyr firmware to provide Assisted GPS on
