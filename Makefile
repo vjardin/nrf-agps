@@ -33,7 +33,12 @@ tests/test_sqlitedb: tests/test_sqlitedb.c sqlitedb.c gps_assist.h sqlitedb.h
 	$(CC) $(TEST_CFLAGS) -o $@ tests/test_sqlitedb.c sqlitedb.c \
 		$(shell pkg-config --libs sqlite3)
 
-test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb
+tests/test_nrf_cloud_cross: tests/test_nrf_cloud_cross.c gps_assist_nrf.c \
+                            gps_assist.h gps_assist_nrf.h tests/nrf_modem_gnss.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_cloud_cross.c gps_assist_nrf.c -lm
+
+test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
+      tests/test_nrf_cloud_cross
 	@echo
 	./tests/test_rinex
 	@echo
@@ -45,8 +50,14 @@ test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqli
 	@echo
 	@if command -v php >/dev/null 2>&1; then \
 		php tests/test_php_api.php; \
+		echo; \
+		php tests/test_nrf_cloud.php; \
+		echo; \
+		php tests/gen_nrf_cloud_binary.php /tmp/test_nrf_cloud_cross.bin && \
+		./tests/test_nrf_cloud_cross /tmp/test_nrf_cloud_cross.bin && \
+		rm -f /tmp/test_nrf_cloud_cross.bin; \
 	else \
-		echo "(skip PHP API test, php not installed)"; \
+		echo "(skip PHP tests, php not installed)"; \
 	fi
 
 test-integration: tests/test_rinex tests/test_nrf_convert
@@ -57,11 +68,12 @@ test-integration: tests/test_rinex tests/test_nrf_convert
 
 clean:
 	rm -f $(OBJS) $(BIN) gps_assist_data.c
-	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb
+	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
+	     tests/test_nrf_cloud_cross
 
 lint-php:
 	@if command -v php >/dev/null 2>&1; then \
-		vendor/bin/parallel-lint php/ tests/test_php_api.php && \
+		vendor/bin/parallel-lint php/ tests/test_php_api.php tests/test_nrf_cloud.php && \
 		vendor/bin/phpstan analyse; \
 	else \
 		echo "(skip PHP lint, php not installed)"; \

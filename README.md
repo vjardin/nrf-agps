@@ -119,13 +119,15 @@ First, populate the database, then start the PHP built-in server:
 ./rinex_dl -s agnss.db
 
 # 2. Start the server (listens on port 8080)
-AGNSS_DB_PATH=agnss.db php -S localhost:8080 -t php/
+AGNSS_DB_PATH=agnss.db php -S localhost:8080 php/index.php
 ```
 
 The server runs in the foreground and logs requests to stderr.
 Press Ctrl-C to stop.  The `AGNSS_DB_PATH` environment variable
 points to the database file; it defaults to `../agnss.db` relative
-to the `php/` directory.
+to the `php/` directory.  Using `php/index.php` as the router script
+(instead of `-t php/`) ensures POST requests to `/v1/location/agnss`
+are routed correctly.
 
 ### Query parameters
 
@@ -255,6 +257,86 @@ server {
     }
 }
 ```
+
+## nRF Cloud-compatible binary A-GNSS endpoint
+
+The server also exposes a `POST /v1/location/agnss` endpoint that returns
+binary A-GNSS data in nRF Cloud schema v1 format. This is wire-compatible
+with the `nrf_cloud_agnss` Zephyr library — existing firmware that uses
+`nrf_cloud_agnss_process()` works unmodified, just by pointing it at this
+server instead of `api.nrfcloud.com`.
+
+### Binary protocol
+
+The response is `application/octet-stream` with this layout:
+
+```
+[0x01]                     schema version
+[type(1) count(2LE) data]  element group, repeated
+```
+
+Each element group carries a type ID and `count` packed structs. The
+structs match the nRF modem `nrf_modem_gnss_agnss_*` types exactly
+(little-endian, `__packed`).
+
+| Type ID | Name               | Struct size (bytes) |
+|---------|--------------------|---------------------|
+| 1       | UTC parameters     | 14                  |
+| 2       | GPS ephemeris      | 62                  |
+| 3       | GPS almanac        | 31                  |
+| 4       | Klobuchar iono     | 8                   |
+| 7       | System clock       | 12                  |
+| 8       | Location           | 15                  |
+| 9       | Integrity (GPS)    | 4                   |
+| 12      | QZSS ephemeris     | 62                  |
+| 13      | QZSS integrity     | 4                   |
+
+### curl examples
+
+```sh
+# Request all A-GNSS data types
+curl -s -X POST http://localhost:8080/v1/location/agnss \
+  -H 'Content-Type: application/json' \
+  -d '{"types":[1,2,3,4,7,8,9]}' \
+  -o agnss.bin
+
+# GPS ephemeris + ionosphere only
+curl -s -X POST http://localhost:8080/v1/location/agnss \
+  -H 'Content-Type: application/json' \
+  -d '{"types":[2,4]}' \
+  -o agnss.bin
+
+# With QZSS
+curl -s -X POST http://localhost:8080/v1/location/agnss \
+  -H 'Content-Type: application/json' \
+  -d '{"types":[1,2,3,4,7,8,9,12,13]}' \
+  -o agnss.bin
+
+# Inspect response size
+curl -s -X POST http://localhost:8080/v1/location/agnss \
+  -H 'Content-Type: application/json' \
+  -d '{"types":[1,2,3,4,7,8,9]}' \
+  -w '\nSize: %{size_download} bytes\n' -o /dev/null
+
+# Range request (fragmented delivery)
+curl -s -X POST http://localhost:8080/v1/location/agnss \
+  -H 'Content-Type: application/json' \
+  -H 'Range: bytes=0-255' \
+  -d '{"types":[2]}' \
+  -o fragment.bin
+```
+
+### Firmware configuration
+
+To point your nRF Connect SDK firmware at this server instead of
+nRF Cloud, set these Kconfig options:
+
+```
+CONFIG_NRF_CLOUD_REST_AUTOGEN_JWT=n
+CONFIG_NRF_CLOUD_REST_HOST_NAME="your-server:8080"
+```
+
+Or use the `nrf_cloud_rest` API with a custom hostname.
 
 ## Zephyr integration
 
@@ -426,6 +508,20 @@ Tests the PHP REST API query functions directly (requires `php` CLI):
 - Constellation filtering: GPS-only or QZSS-only queries
 - Missing database: proper error handling
 - JSON round-trip: encode/decode preserves all field precision
+
+### test_nrf_cloud
+
+Tests the nRF Cloud binary encoder functions (requires `php` CLI):
+
+- Struct sizes: ephemeris (62 bytes), almanac (31 bytes), klobuchar (8),
+  UTC (14), system time (12), location (15), integrity (4)
+- Element group headers: correct type IDs and element counts
+- GPS ICD conversions: toc/toe scaling, eccentricity quantization,
+  Klobuchar alpha conversion, almanac time-of-almanac encoding
+- Full response builder: schema byte, all element groups parseable,
+  payload fully consumed
+- Helper functions: to_unsigned masking for signed→unsigned packing
+- Error handling: missing database exception
 
 ## Limitations
 

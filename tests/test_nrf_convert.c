@@ -239,7 +239,7 @@ static void test_convert_clock_roundtrip(void)
 	TEST("convert: af0/af1 round-trip within 1 LSB");
 
 	/* af0: scale = 2^-31 */
-	double lsb_af0 = 9.31322574615478515625e-10;
+	double lsb_af0 = 4.65661287307739257812e-10;
 	int32_t af0_icd = (int32_t)round(af0 / lsb_af0);
 	double af0_back = af0_icd * lsb_af0;
 	ASSERT_DBL_NEAR(af0_back, af0, lsb_af0);

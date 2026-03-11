@@ -77,12 +77,12 @@ static void convert_ephemeris(const struct gps_ephemeris *src,
 	dst->toe = (uint16_t)(src->toe / 16);
 
 	/* Clock corrections */
-	dst->af0 = (int32_t)round(src->af0 / 9.31322574615478515625e-10);  /* 2^-31 */
+	dst->af0 = (int32_t)round(src->af0 / 4.65661287307739257812e-10);  /* 2^-31 */
 	dst->af1 = (int16_t)round(src->af1 / 1.13686837721616029739e-13);  /* 2^-43 */
 	dst->af2 = (int8_t)round(src->af2 / 2.77555756156289135106e-17);   /* 2^-55 */
 
 	/* Group delay */
-	dst->tgd = (int8_t)round(src->tgd / 9.31322574615478515625e-10);  /* 2^-31 */
+	dst->tgd = (int8_t)round(src->tgd / 4.65661287307739257812e-10);  /* 2^-31 */
 
 	/* Keplerian parameters (angles: radians -> semi-circles, then scale) */
 	dst->w       = (int32_t)round(rad2sc(src->omega) / 4.65661287307739257812e-10);       /* 2^-31 */

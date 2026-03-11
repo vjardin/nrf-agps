@@ -10,6 +10,7 @@ tests/test_rinex
 tests/test_nrf_convert
 tests/test_almanac
 tests/test_sqlitedb
+tests/test_nrf_cloud_cross
 
 # PHP dependencies
 /vendor/
