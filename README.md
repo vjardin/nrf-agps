@@ -10,6 +10,7 @@ the nRF9151, providing helpers to reduce Time To First Fix (TTFF).
 ## Build
 
 Dependencies: `libcurl-dev`, `zlib-dev`, `libsqlite3-dev`, `pkg-config`.
+Optional (for LPP encoder): [mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+.
 
 ```
 # Debian/Ubuntu
@@ -338,6 +339,69 @@ CONFIG_NRF_CLOUD_REST_HOST_NAME="your-server:8080"
 
 Or use the `nrf_cloud_rest` API with a custom hostname.
 
+## LPP UPER encoder (3GPP TS 37.355)
+
+The `lpp_builder` library encodes GPS/QZSS assistance data into 3GPP
+TS 37.355 LPP `ProvideAssistanceData` messages using UPER (Unaligned
+Packed Encoding Rules). This is the standard encoding used by LTE
+modems for network-assisted GNSS via the LPP protocol.
+
+### Prerequisites
+
+The ASN.1 codec is built from the 3GPP LPP ASN.1 specification using
+[mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+:
+
+```sh
+# Install asn1c from source (the Debian/Ubuntu apt package is too old)
+git clone https://github.com/mouse07410/asn1c.git
+cd asn1c && autoreconf -iv && ./configure && make && sudo make install
+```
+
+### Building the ASN.1 codec
+
+```sh
+# Generate C sources from the 3GPP ASN.1 spec (only needed once,
+# or after modifying asn1/specs/LPP.asn)
+make -C asn1 regenerate
+
+# Build the shared library
+make asn1/liblpp_asn1.so
+```
+
+The generated C/H files in `asn1/generated/` are gitignored — they are
+a build artifact. Only the ASN.1 spec (`asn1/specs/LPP.asn`, 3GPP
+TS 37.355 Release 16.4) is committed.
+
+### What it encodes
+
+The encoder builds a complete LPP message from `gps_assist_data`:
+
+| LPP IE                     | Source                                      |
+|-----------------------------|---------------------------------------------|
+| NAV ephemeris (per GPS SV)  | RINEX broadcast ephemeris, GPS ICD scales   |
+| NAV ephemeris (per QZSS SV) | RINEX QZSS records, 0-based SV-ID from 193 |
+| NAV almanac                 | SEM/YUMA parsed almanac                     |
+| Klobuchar ionospheric model | RINEX header GPSA/GPSB                      |
+| UTC ModelSet1               | RINEX header GPUT                           |
+| GNSS reference time         | GPS days/seconds since epoch                |
+| Reference location          | Ellipsoid point with altitude + uncertainty  |
+
+The scale factors match IS-GPS-200 Table 20-I/III/IX/X exactly — the
+same conversions used by the nRF modem binary format.
+
+### Testing
+
+```sh
+# Build and run the LPP round-trip test
+make tests/test_lpp
+LD_LIBRARY_PATH=asn1 ./tests/test_lpp
+```
+
+The test encodes known assistance data (2 GPS SVs, 1 QZSS SV,
+almanac, ionosphere, UTC, location) to UPER, decodes back, and
+verifies all 66 fields match. An empty-data test validates encoding
+without satellite data.
+
 ## Zephyr integration
 
 Copy these files into your Zephyr project `src/` directory:
@@ -497,6 +561,17 @@ Tests the SQLite storage layer using in-memory test data:
 - Store and read: all fields round-trip (metadata, ephemeris, almanac, iono, UTC)
 - Multiple datasets: separate metadata IDs, independent ephemeris rows
 - No almanac: empty almanac/QZSS tables when none provided
+
+### test_lpp
+
+Round-trip test for the LPP UPER encoder (requires `asn1/liblpp_asn1.so`):
+
+- Encode: builds LPP ProvideAssistanceData from test data (2 GPS + 1 QZSS
+  ephemeris, 1 almanac, Klobuchar iono, UTC, location)
+- Decode: parses UPER bitstream back into ASN.1 structures
+- Verify: all fields match — reference time, location, ionosphere,
+  ephemeris clock/orbit, almanac, UTC model, QZSS SV-ID (0-based)
+- Empty data: encodes/decodes with no satellites (no GenericAssistData)
 
 ### test_php_api
 

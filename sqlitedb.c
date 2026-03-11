@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 #include <stdio.h>
+#include <string.h>
 #include <sqlite3.h>
 
 #include "sqlitedb.h"
@@ -301,6 +302,240 @@ static int insert_utc(sqlite3 *db, sqlite3_int64 meta_id,
 	rc = sqlite3_step(stmt);
 	sqlite3_finalize(stmt);
 	return (rc == SQLITE_DONE) ? 0 : -1;
+}
+
+static int read_metadata(sqlite3 *db, struct gps_assist_data *data,
+			 sqlite3_int64 *out_id)
+{
+	sqlite3_stmt *stmt;
+	const char *sql =
+		"SELECT id, timestamp, gps_week,"
+		" ref_latitude, ref_longitude, ref_altitude"
+		" FROM metadata ORDER BY id DESC LIMIT 1";
+	int rc;
+
+	rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return -1;
+
+	rc = sqlite3_step(stmt);
+	if (rc != SQLITE_ROW) {
+		sqlite3_finalize(stmt);
+		return -1;
+	}
+
+	*out_id = sqlite3_column_int64(stmt, 0);
+	data->timestamp = (uint32_t)sqlite3_column_int(stmt, 1);
+	data->gps_week = (uint16_t)sqlite3_column_int(stmt, 2);
+
+	if (sqlite3_column_type(stmt, 3) != SQLITE_NULL) {
+		data->location.latitude = sqlite3_column_double(stmt, 3);
+		data->location.longitude = sqlite3_column_double(stmt, 4);
+		data->location.altitude = (int16_t)sqlite3_column_int(stmt, 5);
+		data->location.valid = 1;
+	}
+
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+static int read_ephemeris(sqlite3 *db, sqlite3_int64 meta_id,
+			  struct gps_assist_data *data)
+{
+	sqlite3_stmt *stmt;
+	const char *sql =
+		"SELECT constellation, prn, health, iodc, iode, week,"
+		" toe, toc, af0, af1, af2, sqrt_a, e, i0, omega0, omega,"
+		" m0, delta_n, omega_dot, idot,"
+		" cuc, cus, crc, crs, cic, cis, tgd"
+		" FROM ephemeris WHERE metadata_id = ?";
+	int rc;
+
+	rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return -1;
+
+	sqlite3_bind_int64(stmt, 1, meta_id);
+
+	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		const char *cons = (const char *)sqlite3_column_text(stmt, 0);
+		struct gps_ephemeris *s;
+
+		if (cons && cons[0] == 'Q') {
+			if (data->num_qzss >= QZSS_MAX_SATS)
+				continue;
+			s = &data->qzss[data->num_qzss++];
+		} else {
+			if (data->num_sv >= GPS_MAX_SATS)
+				continue;
+			s = &data->sv[data->num_sv++];
+		}
+
+		s->prn       = (uint8_t)sqlite3_column_int(stmt, 1);
+		s->health    = (uint8_t)sqlite3_column_int(stmt, 2);
+		s->iodc      = (uint16_t)sqlite3_column_int(stmt, 3);
+		s->iode      = (uint8_t)sqlite3_column_int(stmt, 4);
+		s->week      = (uint16_t)sqlite3_column_int(stmt, 5);
+		s->toe       = (uint32_t)sqlite3_column_int(stmt, 6);
+		s->toc       = (uint32_t)sqlite3_column_int(stmt, 7);
+		s->af0       = sqlite3_column_double(stmt, 8);
+		s->af1       = sqlite3_column_double(stmt, 9);
+		s->af2       = sqlite3_column_double(stmt, 10);
+		s->sqrt_a    = sqlite3_column_double(stmt, 11);
+		s->e         = sqlite3_column_double(stmt, 12);
+		s->i0        = sqlite3_column_double(stmt, 13);
+		s->omega0    = sqlite3_column_double(stmt, 14);
+		s->omega     = sqlite3_column_double(stmt, 15);
+		s->m0        = sqlite3_column_double(stmt, 16);
+		s->delta_n   = sqlite3_column_double(stmt, 17);
+		s->omega_dot = sqlite3_column_double(stmt, 18);
+		s->idot      = sqlite3_column_double(stmt, 19);
+		s->cuc       = sqlite3_column_double(stmt, 20);
+		s->cus       = sqlite3_column_double(stmt, 21);
+		s->crc       = sqlite3_column_double(stmt, 22);
+		s->crs       = sqlite3_column_double(stmt, 23);
+		s->cic       = sqlite3_column_double(stmt, 24);
+		s->cis       = sqlite3_column_double(stmt, 25);
+		s->tgd       = sqlite3_column_double(stmt, 26);
+	}
+
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+static int read_almanac(sqlite3 *db, sqlite3_int64 meta_id,
+			struct gps_assist_data *data)
+{
+	sqlite3_stmt *stmt;
+	const char *sql =
+		"SELECT prn, health, ioda, week, toa,"
+		" e, delta_i, omega_dot, sqrt_a,"
+		" omega0, omega, m0, af0, af1"
+		" FROM almanac WHERE metadata_id = ?";
+	int rc;
+
+	rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return -1;
+
+	sqlite3_bind_int64(stmt, 1, meta_id);
+
+	while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+		if (data->num_alm >= GPS_MAX_SATS)
+			continue;
+		struct gps_almanac *a = &data->alm[data->num_alm++];
+
+		a->prn       = (uint8_t)sqlite3_column_int(stmt, 0);
+		a->health    = (uint8_t)sqlite3_column_int(stmt, 1);
+		a->ioda      = (uint8_t)sqlite3_column_int(stmt, 2);
+		a->week      = (uint16_t)sqlite3_column_int(stmt, 3);
+		a->toa       = (uint32_t)sqlite3_column_int(stmt, 4);
+		a->e         = sqlite3_column_double(stmt, 5);
+		a->delta_i   = sqlite3_column_double(stmt, 6);
+		a->omega_dot = sqlite3_column_double(stmt, 7);
+		a->sqrt_a    = sqlite3_column_double(stmt, 8);
+		a->omega0    = sqlite3_column_double(stmt, 9);
+		a->omega     = sqlite3_column_double(stmt, 10);
+		a->m0        = sqlite3_column_double(stmt, 11);
+		a->af0       = sqlite3_column_double(stmt, 12);
+		a->af1       = sqlite3_column_double(stmt, 13);
+	}
+
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+static int read_ionosphere(sqlite3 *db, sqlite3_int64 meta_id,
+			   struct gps_iono *iono)
+{
+	sqlite3_stmt *stmt;
+	const char *sql =
+		"SELECT alpha0, alpha1, alpha2, alpha3,"
+		" beta0, beta1, beta2, beta3"
+		" FROM ionosphere WHERE metadata_id = ?";
+	int rc;
+
+	rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return -1;
+
+	sqlite3_bind_int64(stmt, 1, meta_id);
+
+	rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW) {
+		iono->alpha[0] = sqlite3_column_double(stmt, 0);
+		iono->alpha[1] = sqlite3_column_double(stmt, 1);
+		iono->alpha[2] = sqlite3_column_double(stmt, 2);
+		iono->alpha[3] = sqlite3_column_double(stmt, 3);
+		iono->beta[0]  = sqlite3_column_double(stmt, 4);
+		iono->beta[1]  = sqlite3_column_double(stmt, 5);
+		iono->beta[2]  = sqlite3_column_double(stmt, 6);
+		iono->beta[3]  = sqlite3_column_double(stmt, 7);
+	}
+
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+static int read_utc(sqlite3 *db, sqlite3_int64 meta_id,
+		    struct gps_utc *utc)
+{
+	sqlite3_stmt *stmt;
+	const char *sql =
+		"SELECT a0, a1, tot, wnt, dt_ls"
+		" FROM utc_params WHERE metadata_id = ?";
+	int rc;
+
+	rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		return -1;
+
+	sqlite3_bind_int64(stmt, 1, meta_id);
+
+	rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW) {
+		utc->a0    = sqlite3_column_double(stmt, 0);
+		utc->a1    = sqlite3_column_double(stmt, 1);
+		utc->tot   = (uint32_t)sqlite3_column_int(stmt, 2);
+		utc->wnt   = (uint16_t)sqlite3_column_int(stmt, 3);
+		utc->dt_ls = (int8_t)sqlite3_column_int(stmt, 4);
+	}
+
+	sqlite3_finalize(stmt);
+	return 0;
+}
+
+int sqlitedb_read_latest(const char *db_path, struct gps_assist_data *data)
+{
+	sqlite3 *db;
+	sqlite3_int64 meta_id;
+	int ret = -1;
+
+	memset(data, 0, sizeof(*data));
+
+	if (sqlite3_open_v2(db_path, &db, SQLITE_OPEN_READONLY, NULL)
+	    != SQLITE_OK) {
+		fprintf(stderr, "SQLite open error: %s\n",
+			sqlite3_errmsg(db));
+		sqlite3_close(db);
+		return -1;
+	}
+
+	if (read_metadata(db, data, &meta_id) != 0)
+		goto out;
+	if (read_ephemeris(db, meta_id, data) != 0)
+		goto out;
+	if (read_almanac(db, meta_id, data) != 0)
+		goto out;
+	if (read_ionosphere(db, meta_id, &data->iono) != 0)
+		goto out;
+	if (read_utc(db, meta_id, &data->utc) != 0)
+		goto out;
+
+	ret = 0;
+out:
+	sqlite3_close(db);
+	return ret;
 }
 
 int sqlitedb_store(const char *db_path, const struct gps_assist_data *data,

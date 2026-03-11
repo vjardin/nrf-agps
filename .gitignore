@@ -1,6 +1,7 @@
 # Build artifacts
 *.o
 rinex_dl
+supl_server
 
 # Generated source
 gps_assist_data.c
@@ -12,10 +13,13 @@ tests/test_almanac
 tests/test_sqlitedb
 tests/test_nrf_cloud_cross
 tests/test_lpp
+tests/supl_client
 
-# ASN.1 generated code and shared library
+# ASN.1 generated code and shared libraries
 asn1/generated/
+asn1/generated-ulp/
 asn1/liblpp_asn1.*
+asn1/libulp_asn1.*
 
 # PHP dependencies
 /vendor/

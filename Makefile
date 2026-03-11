@@ -37,15 +37,33 @@ tests/test_nrf_cloud_cross: tests/test_nrf_cloud_cross.c gps_assist_nrf.c \
                             gps_assist.h gps_assist_nrf.h tests/nrf_modem_gnss.h
 	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_cloud_cross.c gps_assist_nrf.c -lm
 
-asn1/liblpp_asn1.so:
+asn1/liblpp_asn1.so asn1/libulp_asn1.so:
 	$(MAKE) -C asn1
 
 LPP_CFLAGS = $(TEST_CFLAGS) -Iasn1/generated -DASN_DISABLE_OER_SUPPORT
 LPP_LDFLAGS = -Lasn1 -llpp_asn1 -lm
 
+ULP_CFLAGS = $(TEST_CFLAGS) -Iasn1/generated-ulp -DASN_DISABLE_OER_SUPPORT
+ULP_LDFLAGS = -Lasn1 -lulp_asn1
+SUPL_LDFLAGS = $(LPP_LDFLAGS) $(ULP_LDFLAGS) \
+	$(shell pkg-config --libs sqlite3 libevent libevent_openssl openssl)
+
 tests/test_lpp: tests/test_lpp.c lpp_builder.c lpp_builder.h gps_assist.h \
                 asn1/liblpp_asn1.so
 	$(CC) $(LPP_CFLAGS) -o $@ tests/test_lpp.c lpp_builder.c $(LPP_LDFLAGS)
+
+# --- SUPL server ---
+
+supl_server: supl_main.c supl_server.c supl_codec.c lpp_builder.c sqlitedb.c \
+             supl_server.h supl_codec.h lpp_builder.h sqlitedb.h gps_assist.h \
+             asn1/liblpp_asn1.so asn1/libulp_asn1.so
+	$(CC) $(LPP_CFLAGS) $(ULP_CFLAGS) -o $@ \
+		supl_main.c supl_server.c supl_codec.c lpp_builder.c sqlitedb.c \
+		$(SUPL_LDFLAGS)
+
+tests/supl_client: tests/supl_client.c asn1/libulp_asn1.so asn1/liblpp_asn1.so
+	$(CC) $(LPP_CFLAGS) $(ULP_CFLAGS) -o $@ tests/supl_client.c \
+		$(ULP_LDFLAGS) $(LPP_LDFLAGS) $(shell pkg-config --libs openssl libcjson)
 
 test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
       tests/test_nrf_cloud_cross tests/test_lpp
@@ -79,9 +97,9 @@ test-integration: tests/test_rinex tests/test_nrf_convert
 	./tests/test_nrf_convert
 
 clean:
-	rm -f $(OBJS) $(BIN) gps_assist_data.c
+	rm -f $(OBJS) $(BIN) gps_assist_data.c supl_server
 	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
-	     tests/test_nrf_cloud_cross tests/test_lpp
+	     tests/test_nrf_cloud_cross tests/test_lpp tests/supl_client
 	$(MAKE) -C asn1 clean
 
 lint-php:
