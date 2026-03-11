@@ -90,6 +90,11 @@ test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqli
 		echo "(skip PHP tests, php not installed)"; \
 	fi
 
+test-supl: rinex_dl supl_server tests/supl_client
+	@echo
+	@echo "=== SUPL structural comparison test ==="
+	@sh tests/test_supl_compare.sh
+
 test-integration: tests/test_rinex tests/test_nrf_convert
 	@echo
 	./tests/test_rinex --integration
