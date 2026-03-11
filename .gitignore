@@ -11,6 +11,11 @@ tests/test_nrf_convert
 tests/test_almanac
 tests/test_sqlitedb
 tests/test_nrf_cloud_cross
+tests/test_lpp
+
+# ASN.1 generated code and shared library
+asn1/generated/
+asn1/liblpp_asn1.*
 
 # PHP dependencies
 /vendor/

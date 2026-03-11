@@ -37,8 +37,18 @@ tests/test_nrf_cloud_cross: tests/test_nrf_cloud_cross.c gps_assist_nrf.c \
                             gps_assist.h gps_assist_nrf.h tests/nrf_modem_gnss.h
 	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_cloud_cross.c gps_assist_nrf.c -lm
 
+asn1/liblpp_asn1.so:
+	$(MAKE) -C asn1
+
+LPP_CFLAGS = $(TEST_CFLAGS) -Iasn1/generated -DASN_DISABLE_OER_SUPPORT
+LPP_LDFLAGS = -Lasn1 -llpp_asn1 -lm
+
+tests/test_lpp: tests/test_lpp.c lpp_builder.c lpp_builder.h gps_assist.h \
+                asn1/liblpp_asn1.so
+	$(CC) $(LPP_CFLAGS) -o $@ tests/test_lpp.c lpp_builder.c $(LPP_LDFLAGS)
+
 test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
-      tests/test_nrf_cloud_cross
+      tests/test_nrf_cloud_cross tests/test_lpp
 	@echo
 	./tests/test_rinex
 	@echo
@@ -47,6 +57,8 @@ test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqli
 	./tests/test_almanac
 	@echo
 	./tests/test_sqlitedb
+	@echo
+	LD_LIBRARY_PATH=asn1 ./tests/test_lpp
 	@echo
 	@if command -v php >/dev/null 2>&1; then \
 		php tests/test_php_api.php; \
@@ -69,7 +81,8 @@ test-integration: tests/test_rinex tests/test_nrf_convert
 clean:
 	rm -f $(OBJS) $(BIN) gps_assist_data.c
 	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
-	     tests/test_nrf_cloud_cross
+	     tests/test_nrf_cloud_cross tests/test_lpp
+	$(MAKE) -C asn1 clean
 
 lint-php:
 	@if command -v php >/dev/null 2>&1; then \
