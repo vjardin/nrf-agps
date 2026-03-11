@@ -243,7 +243,12 @@ Tests the SEM and YUMA almanac parsers using embedded fixture data:
 
 ### No integrity data
 
-Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) is not provided yet.
+Integrity data (`NRF_MODEM_GNSS_AGNSS_INTEGRITY`) is not provided.
+GNSS signal integrity (UDREI per satellite) comes from SBAS systems
+(WAAS/EGNOS) which broadcast real-time corrections via geostationary
+satellites on L1. This data expires in seconds, making it unsuitable
+for offline pre-generation. The nRF9151 modem decodes SBAS integrity
+messages directly when SBAS satellites are visible — no injection needed.
 
 ### Compile-time data only
 
