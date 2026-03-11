@@ -103,18 +103,29 @@ populates a SQLite database (`-s`).
 The `php/` directory provides a JSON REST API that reads from the SQLite
 database populated by `rinex_dl -s`.
 
-### Quick start
+### Prerequisites
 
 ```sh
-# Populate the database
+# Debian/Ubuntu
+sudo apt install php-cli php-sqlite3
+```
+
+### Running the server
+
+First, populate the database, then start the PHP built-in server:
+
+```sh
+# 1. Fetch yesterday's ephemeris into a SQLite database
 ./rinex_dl -s agnss.db
 
-# Start the built-in PHP server
+# 2. Start the server (listens on port 8080)
 AGNSS_DB_PATH=agnss.db php -S localhost:8080 -t php/
-
-# Query all data (latest dataset)
-curl http://localhost:8080/?types=ephe,alm,iono,utc,loc
 ```
+
+The server runs in the foreground and logs requests to stderr.
+Press Ctrl-C to stop.  The `AGNSS_DB_PATH` environment variable
+points to the database file; it defaults to `../agnss.db` relative
+to the `php/` directory.
 
 ### Query parameters
 
@@ -124,6 +135,100 @@ curl http://localhost:8080/?types=ephe,alm,iono,utc,loc
 | `prn`           | Comma-separated PRN numbers          | all     |
 | `constellation` | `GPS`, `QZSS`                        | all     |
 | `dataset`       | Metadata ID                          | latest  |
+
+### curl examples
+
+```sh
+# Fetch everything (latest dataset) — pretty-printed JSON
+curl -s http://localhost:8080/ | jq .
+
+# Ephemeris + ionosphere only
+curl -s 'http://localhost:8080/?types=ephe,iono' | jq .
+
+# Single satellite (PRN 1)
+curl -s 'http://localhost:8080/?types=ephe&prn=1' | jq .
+
+# Multiple PRNs
+curl -s 'http://localhost:8080/?types=ephe&prn=1,3,7,14' | jq .
+
+# QZSS satellites only
+curl -s 'http://localhost:8080/?types=ephe&constellation=QZSS' | jq .
+
+# GPS ephemeris + almanac for PRN 1
+curl -s 'http://localhost:8080/?types=ephe,alm&prn=1' | jq .
+
+# Only UTC and ionospheric correction parameters
+curl -s 'http://localhost:8080/?types=utc,iono' | jq .
+
+# Reference location only
+curl -s 'http://localhost:8080/?types=loc' | jq .
+
+# Specific historical dataset by ID
+curl -s 'http://localhost:8080/?dataset=1' | jq .
+
+# Count satellites in latest dataset
+curl -s 'http://localhost:8080/?types=ephe' | jq '.ephemeris | length'
+
+# List all GPS PRNs
+curl -s 'http://localhost:8080/?types=ephe&constellation=GPS' \
+  | jq '[.ephemeris[].prn]'
+
+# Check dataset age
+curl -s 'http://localhost:8080/?types=loc' | jq '.dataset.created_at'
+```
+
+### Example response
+
+```sh
+$ curl -s 'http://localhost:8080/?types=ephe,iono&prn=1' | jq .
+```
+
+```json
+{
+  "dataset": {
+    "id": 1,
+    "timestamp": 1773064800,
+    "gps_week": 2409,
+    "source": "BRDC00IGS_R_20260690000_01D_MN.rnx.gz",
+    "created_at": "2026-03-11 02:00:00"
+  },
+  "ephemeris": [
+    {
+      "constellation": "GPS",
+      "prn": 1,
+      "health": 0,
+      "iodc": 933,
+      "iode": 165,
+      "week": 2409,
+      "toe": 396000,
+      "toc": 396000,
+      "af0": -2.578310668468e-5,
+      "af1": -2.84217094304e-14,
+      "af2": 0,
+      "sqrt_a": 5153.64892578125,
+      "e": 0.005483717424795,
+      "i0": 0.975550898194,
+      "omega0": -2.025233279608,
+      "omega": -1.722784098283,
+      "m0": 1.296410068666,
+      "delta_n": 4.200289988741e-9,
+      "omega_dot": -7.793218395069e-9,
+      "idot": -2.07876751645e-10,
+      "cuc": -2.935528755188e-6,
+      "cus": 8.16285610199e-6,
+      "crc": 222.65625,
+      "crs": -48.0625,
+      "cic": 1.043081283569e-7,
+      "cis": 1.303851604462e-7,
+      "tgd": -1.117587089539e-8
+    }
+  ],
+  "ionosphere": {
+    "alpha": [1.118e-8, 0, -5.961e-8, 0],
+    "beta": [90110, 0, -196600, 0]
+  }
+}
+```
 
 ### Deployment
 
