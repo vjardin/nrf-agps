@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+const AGNSS_API_VERSION = 1;
+
 /**
  * Return API help document.
  *
@@ -19,6 +21,7 @@ function agnss_help(): array
 {
 	return [
 		'name'        => 'rinex_dl A-GNSS REST API',
+		'version'     => AGNSS_API_VERSION,
 		'description' => 'Serves GPS/QZSS assistance data from RINEX broadcast ephemeris.',
 		'usage'       => 'GET /?types=ephe,alm,iono,utc,loc[&prn=1,3][&constellation=GPS][&dataset=1]',
 		'parameters'  => [
@@ -116,6 +119,7 @@ function agnss_query(
 
 	/** @var array<string, mixed> $response */
 	$response = [
+		'api_version' => AGNSS_API_VERSION,
 		'dataset' => [
 			'id'         => $metaId,
 			'timestamp'  => (int)$meta['timestamp'],

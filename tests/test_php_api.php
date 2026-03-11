@@ -191,6 +191,7 @@ function test_full_query(string $dbPath): void
 
 	$r = agnss_query($dbPath);
 
+	assert_test($r['api_version'] === AGNSS_API_VERSION, 'api_version');
 	assert_test($r['dataset']['id'] === 1, 'dataset id');
 	assert_test($r['dataset']['timestamp'] === 1773064800, 'timestamp');
 	assert_test($r['dataset']['gps_week'] === 2409, 'gps_week');
@@ -315,6 +316,7 @@ function test_help(): void
 	$h = agnss_help();
 	assert_test(count($h) > 0, 'help returns non-empty array');
 	assert_test($h['name'] === 'rinex_dl A-GNSS REST API', 'help: name');
+	assert_test($h['version'] === AGNSS_API_VERSION, 'help: version');
 	assert_test(isset($h['parameters']), 'help: has parameters');
 	assert_test(isset($h['parameters']['types']), 'help: has types param');
 	assert_test(isset($h['parameters']['prn']), 'help: has prn param');
