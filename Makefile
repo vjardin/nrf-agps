@@ -42,6 +42,12 @@ test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqli
 	./tests/test_almanac
 	@echo
 	./tests/test_sqlitedb
+	@echo
+	@if command -v php >/dev/null 2>&1; then \
+		php tests/test_php_api.php; \
+	else \
+		echo "(skip PHP API test, php not installed)"; \
+	fi
 
 test-integration: tests/test_rinex tests/test_nrf_convert
 	@echo
@@ -53,4 +59,12 @@ clean:
 	rm -f $(OBJS) $(BIN) gps_assist_data.c
 	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb
 
-.PHONY: all clean test test-integration
+lint-php:
+	@if command -v php >/dev/null 2>&1; then \
+		vendor/bin/parallel-lint php/ tests/test_php_api.php && \
+		vendor/bin/phpstan analyse; \
+	else \
+		echo "(skip PHP lint, php not installed)"; \
+	fi
+
+.PHONY: all clean test test-integration lint-php

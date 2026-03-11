@@ -8,3 +8,11 @@ gps_assist_data.c
 # Test binaries
 tests/test_rinex
 tests/test_nrf_convert
+tests/test_almanac
+tests/test_sqlitedb
+
+# PHP dependencies
+/vendor/
+
+# SQLite databases
+*.db

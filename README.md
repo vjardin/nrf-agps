@@ -84,14 +84,68 @@ derived almanac is used.
 
 The tool downloads the combined BRDC navigation file from
 [BKG IGS](https://igs.bkg.bund.de/) (no authentication required),
-parses GPS satellite records, and writes `gps_assist_data.c`.
+parses GPS satellite records, and writes `gps_assist_data.c` or
+populates a SQLite database (`-s`).
 
 ### Daily cron job
 
 ```
 # /etc/cron.d/rinex-agps
 # Run at 02:00 UTC daily — yesterday's BRDC file is complete by then
+# C source output:
 0 2 * * * user /path/to/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+# SQLite output (for REST API serving):
+0 2 * * * user /path/to/rinex_dl -s /var/lib/agnss/rinex.db
+```
+
+## PHP REST API
+
+The `php/` directory provides a JSON REST API that reads from the SQLite
+database populated by `rinex_dl -s`.
+
+### Quick start
+
+```sh
+# Populate the database
+./rinex_dl -s agnss.db
+
+# Start the built-in PHP server
+AGNSS_DB_PATH=agnss.db php -S localhost:8080 -t php/
+
+# Query all data (latest dataset)
+curl http://localhost:8080/?types=ephe,alm,iono,utc,loc
+```
+
+### Query parameters
+
+| Parameter       | Values                               | Default |
+|-----------------|--------------------------------------|---------|
+| `types`         | `ephe,alm,iono,utc,loc` (any combo) | all     |
+| `prn`           | Comma-separated PRN numbers          | all     |
+| `constellation` | `GPS`, `QZSS`                        | all     |
+| `dataset`       | Metadata ID                          | latest  |
+
+### Deployment
+
+For production, use PHP-FPM with nginx:
+
+```nginx
+server {
+    listen 8080;
+    root /path/to/rinex/php;
+    index index.php;
+
+    location / {
+        try_files $uri /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param AGNSS_DB_PATH /var/lib/agnss/rinex.db;
+        include fastcgi_params;
+    }
+}
 ```
 
 ## Zephyr integration
@@ -253,6 +307,17 @@ Tests the SQLite storage layer using in-memory test data:
 - Store and read: all fields round-trip (metadata, ephemeris, almanac, iono, UTC)
 - Multiple datasets: separate metadata IDs, independent ephemeris rows
 - No almanac: empty almanac/QZSS tables when none provided
+
+### test_php_api
+
+Tests the PHP REST API query functions directly (requires `php` CLI):
+
+- Full query: all types returned with correct values
+- Type filtering: request only iono, or ephe+utc, etc.
+- PRN filtering: select specific satellites
+- Constellation filtering: GPS-only or QZSS-only queries
+- Missing database: proper error handling
+- JSON round-trip: encode/decode preserves all field precision
 
 ## Limitations
 
