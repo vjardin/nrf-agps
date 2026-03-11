@@ -4,7 +4,8 @@
  *
  * Serves GPS assistance data from SQLite as JSON.
  *
- * GET /agnss?types=ephe,iono,utc,alm,loc&prn=1,3&constellation=GPS&dataset=1
+ * GET /                   -> API help
+ * GET /?types=ephe,iono   -> query data
  *
  * Deploy with PHP-FPM + nginx, or test with:
  *   AGNSS_DB_PATH=/path/to/db.sqlite php -S localhost:8080 -t php/
@@ -19,6 +20,12 @@ require_once __DIR__ . '/agnss.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+
+/* No query parameters → show API help */
+if (empty($_GET)) {
+	echo json_encode(agnss_help(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+	exit;
+}
 
 $dbPath = getenv('AGNSS_DB_PATH') ?: (__DIR__ . '/../agnss.db');
 

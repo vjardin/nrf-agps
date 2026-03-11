@@ -307,9 +307,31 @@ function test_json_roundtrip(string $dbPath): void
 	assert_float($decoded['ionosphere']['alpha'][0], 1.118e-08, 'round-trip iono alpha0');
 }
 
+/* === Test: help response === */
+function test_help(): void
+{
+	echo "=== test_php_api: help response ===\n";
+
+	$h = agnss_help();
+	assert_test(count($h) > 0, 'help returns non-empty array');
+	assert_test($h['name'] === 'rinex_dl A-GNSS REST API', 'help: name');
+	assert_test(isset($h['parameters']), 'help: has parameters');
+	assert_test(isset($h['parameters']['types']), 'help: has types param');
+	assert_test(isset($h['parameters']['prn']), 'help: has prn param');
+	assert_test(isset($h['parameters']['constellation']), 'help: has constellation param');
+	assert_test(isset($h['parameters']['dataset']), 'help: has dataset param');
+	assert_test(isset($h['examples']), 'help: has examples');
+	assert_test(isset($h['parameters']['types']['values']['ephe']), 'help: types lists ephe');
+	assert_test(isset($h['parameters']['types']['values']['iono']), 'help: types lists iono');
+
+	$json = json_encode($h, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+	assert_test(is_string($json), 'help: JSON-encodable');
+}
+
 /* Run all tests */
 $dbPath = create_test_db();
 
+test_help();
 test_full_query($dbPath);
 test_type_filter($dbPath);
 test_prn_filter($dbPath);

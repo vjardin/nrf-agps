@@ -11,6 +11,58 @@
 declare(strict_types=1);
 
 /**
+ * Return API help document.
+ *
+ * @return array<string, mixed>
+ */
+function agnss_help(): array
+{
+	return [
+		'name'        => 'rinex_dl A-GNSS REST API',
+		'description' => 'Serves GPS/QZSS assistance data from RINEX broadcast ephemeris.',
+		'usage'       => 'GET /?types=ephe,alm,iono,utc,loc[&prn=1,3][&constellation=GPS][&dataset=1]',
+		'parameters'  => [
+			'types' => [
+				'description' => 'Comma-separated data types to return',
+				'values'      => [
+					'ephe' => 'Satellite ephemerides (Keplerian orbital parameters)',
+					'alm'  => 'Almanac entries (SEM/YUMA or derived from ephemeris)',
+					'iono' => 'Klobuchar ionospheric correction (alpha/beta)',
+					'utc'  => 'UTC parameters (A0, A1, leap seconds)',
+					'loc'  => 'Reference location (latitude, longitude, altitude)',
+				],
+				'default' => 'all',
+				'required' => true,
+			],
+			'prn' => [
+				'description' => 'Comma-separated PRN numbers to filter',
+				'example'     => '1,3,7,14',
+				'default'     => 'all satellites',
+			],
+			'constellation' => [
+				'description' => 'Filter by constellation',
+				'values'      => ['GPS', 'QZSS'],
+				'default'     => 'all',
+			],
+			'dataset' => [
+				'description' => 'Metadata ID of a specific dataset',
+				'default'     => 'latest',
+			],
+		],
+		'examples' => [
+			'All data'             => '/?types=ephe,alm,iono,utc,loc',
+			'Ephemeris + iono'     => '/?types=ephe,iono',
+			'Single satellite'     => '/?types=ephe&prn=1',
+			'QZSS only'           => '/?types=ephe&constellation=QZSS',
+			'UTC + iono'           => '/?types=utc,iono',
+			'Location only'        => '/?types=loc',
+			'Historical dataset'   => '/?dataset=1&types=ephe',
+		],
+		'source' => 'https://github.com/vjardin/nrf-agps',
+	];
+}
+
+/**
  * Open the SQLite database in read-only mode.
  *
  * @throws RuntimeException if file missing or connection fails

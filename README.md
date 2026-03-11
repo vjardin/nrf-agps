@@ -139,8 +139,11 @@ to the `php/` directory.
 ### curl examples
 
 ```sh
-# Fetch everything (latest dataset) — pretty-printed JSON
+# API help — shows all parameters, values, and examples
 curl -s http://localhost:8080/ | jq .
+
+# Fetch all data types (latest dataset)
+curl -s 'http://localhost:8080/?types=ephe,alm,iono,utc,loc' | jq .
 
 # Ephemeris + ionosphere only
 curl -s 'http://localhost:8080/?types=ephe,iono' | jq .
