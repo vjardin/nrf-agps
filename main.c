@@ -15,6 +15,7 @@
 #include "rinex.h"
 #include "codegen.h"
 #include "almanac.h"
+#include "sqlitedb.h"
 
 static int day_of_year(int year, int month, int day)
 {
@@ -35,11 +36,12 @@ static void usage(const char *prog)
 	fprintf(stderr,
 		"Usage: %s [options]\n"
 		"\n"
-		"Download GPS broadcast ephemeris and generate A-GPS C source.\n"
+		"Download GPS broadcast ephemeris and generate A-GPS data.\n"
 		"\n"
 		"Options:\n"
 		"  -d YYYY-MM-DD  Date to download (default: yesterday)\n"
 		"  -o PREFIX      Output file prefix (default: gps_assist_data)\n"
+		"  -s DB_PATH     Store to SQLite database (instead of C source)\n"
 		"  -u URL         Custom RINEX navigation file URL\n"
 		"  -l LAT,LON    Approximate reference location (default: Paris Notre Dame)\n"
 		"  -f FILE        Parse local RINEX file instead of downloading\n"
@@ -53,6 +55,7 @@ int main(int argc, char **argv)
 {
 	int year = 0, month = 0, day = 0, doy = 0;
 	const char *output = "gps_assist_data";
+	const char *db_path = NULL;
 	const char *url = NULL;
 	const char *local_file = NULL;
 	const char *alm_mode = "derived";
@@ -60,7 +63,7 @@ int main(int argc, char **argv)
 	double ref_lon = 2.3498;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "a:d:l:o:u:f:h")) != -1) {
+	while ((opt = getopt(argc, argv, "a:d:l:o:s:u:f:h")) != -1) {
 		switch (opt) {
 		case 'a':
 			alm_mode = optarg;
@@ -94,6 +97,9 @@ int main(int argc, char **argv)
 			break;
 		case 'o':
 			output = optarg;
+			break;
+		case 's':
+			db_path = optarg;
 			break;
 		case 'u':
 			url = optarg;
@@ -195,11 +201,17 @@ int main(int argc, char **argv)
 		}
 	}
 
-	/* Generate C source */
+	/* Output */
 	const char *source = strrchr(path, '/');
 	source = source ? source + 1 : path;
+	int out_err;
 
-	if (codegen_write(output, &data, source) != 0) {
+	if (db_path)
+		out_err = sqlitedb_store(db_path, &data, source);
+	else
+		out_err = codegen_write(output, &data, source);
+
+	if (out_err) {
 		fprintf(stderr, "Failed to generate output\n");
 		if (!local_file)
 			remove(path);

@@ -9,11 +9,11 @@ the nRF9151, providing helpers to reduce Time To First Fix (TTFF).
 
 ## Build
 
-Dependencies: `libcurl-dev`, `zlib-dev`, `pkg-config`.
+Dependencies: `libcurl-dev`, `zlib-dev`, `libsqlite3-dev`, `pkg-config`.
 
 ```
 # Debian/Ubuntu
-sudo apt install libcurl4-openssl-dev zlib1g-dev pkg-config
+sudo apt install libcurl4-openssl-dev zlib1g-dev libsqlite3-dev pkg-config
 
 make
 ```
@@ -27,6 +27,7 @@ Options:
   -d YYYY-MM-DD  Date to download (default: yesterday)
   -l LAT,LON    Approximate reference location (default: Paris Notre Dame)
   -o PREFIX      Output file prefix (default: gps_assist_data)
+  -s DB_PATH     Store to SQLite database (instead of C source)
   -u URL         Custom RINEX navigation file URL
   -f FILE        Parse local RINEX file instead of downloading
   -a MODE        Almanac source (see below)
@@ -73,6 +74,12 @@ derived almanac is used.
 
 # Use a local YUMA almanac file
 ./rinex_dl -a yuma:/path/to/almanac.yuma
+
+# Store to SQLite database (instead of C source)
+./rinex_dl -s /var/lib/agnss/rinex.db
+
+# SQLite with SEM almanac
+./rinex_dl -s /var/lib/agnss/rinex.db -a sem
 ```
 
 The tool downloads the combined BRDC navigation file from
@@ -239,6 +246,14 @@ Tests the SEM and YUMA almanac parsers using embedded fixture data:
 - YUMA: correct entry count, PRN, radians-to-semi-circles conversion
 - YUMA/SEM agreement: matching dimensionless/time fields across formats
 
+### test_sqlitedb
+
+Tests the SQLite storage layer using in-memory test data:
+
+- Store and read: all fields round-trip (metadata, ephemeris, almanac, iono, UTC)
+- Multiple datasets: separate metadata IDs, independent ephemeris rows
+- No almanac: empty almanac/QZSS tables when none provided
+
 ## Limitations
 
 ### No integrity data
@@ -250,9 +265,13 @@ satellites on L1. This data expires in seconds, making it unsuitable
 for offline pre-generation. The nRF9151 modem decodes SBAS integrity
 messages directly when SBAS satellites are visible — no injection needed.
 
-### Compile-time data only
+### SQLite database output
 
-It is just for testing, then it can become a web service solution.
+With `-s DB_PATH`, data is stored in a SQLite database instead of a C
+source file. Each run inserts a new dataset with its own metadata ID.
+Tables: `metadata`, `ephemeris`, `almanac`, `ionosphere`, `utc_params`.
+The database uses WAL mode for concurrent reads from serving layers
+(PHP, C/libevent).
 
 ### GPS + QZSS only
 

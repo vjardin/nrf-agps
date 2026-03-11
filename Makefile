@@ -1,9 +1,9 @@
 CC      ?= gcc
 CFLAGS  = -Wall -Wextra -std=c11 -O2 -D_GNU_SOURCE \
-          $(shell pkg-config --cflags libcurl)
-LDFLAGS = $(shell pkg-config --libs libcurl) -lz -lm
+          $(shell pkg-config --cflags libcurl sqlite3)
+LDFLAGS = $(shell pkg-config --libs libcurl sqlite3) -lz -lm
 
-SRCS = main.c rinex.c codegen.c almanac.c
+SRCS = main.c rinex.c codegen.c almanac.c sqlitedb.c
 OBJS = $(SRCS:.c=.o)
 BIN  = rinex_dl
 
@@ -12,7 +12,7 @@ all: $(BIN)
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-%.o: %.c gps_assist.h rinex.h codegen.h almanac.h
+%.o: %.c gps_assist.h rinex.h codegen.h almanac.h sqlitedb.h
 	$(CC) $(CFLAGS) -c $<
 
 # --- Tests ---
@@ -29,13 +29,19 @@ tests/test_nrf_convert: tests/test_nrf_convert.c gps_assist_nrf.c \
 tests/test_almanac: tests/test_almanac.c almanac.c gps_assist.h almanac.h
 	$(CC) $(TEST_CFLAGS) -o $@ tests/test_almanac.c almanac.c $(LDFLAGS)
 
-test: tests/test_rinex tests/test_nrf_convert tests/test_almanac
+tests/test_sqlitedb: tests/test_sqlitedb.c sqlitedb.c gps_assist.h sqlitedb.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_sqlitedb.c sqlitedb.c \
+		$(shell pkg-config --libs sqlite3)
+
+test: tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb
 	@echo
 	./tests/test_rinex
 	@echo
 	./tests/test_nrf_convert
 	@echo
 	./tests/test_almanac
+	@echo
+	./tests/test_sqlitedb
 
 test-integration: tests/test_rinex tests/test_nrf_convert
 	@echo
@@ -45,6 +51,6 @@ test-integration: tests/test_rinex tests/test_nrf_convert
 
 clean:
 	rm -f $(OBJS) $(BIN) gps_assist_data.c
-	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac
+	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb
 
 .PHONY: all clean test test-integration
