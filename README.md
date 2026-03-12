@@ -42,6 +42,7 @@ cd -
 ```sh
 meson setup builddir
 meson compile -C builddir
+meson test -C builddir
 ```
 
 Meson builds all targets whose dependencies are satisfied. If SUPL
