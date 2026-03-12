@@ -117,8 +117,8 @@ clean:
 
 lint-php:
 	@if command -v php >/dev/null 2>&1; then \
-		vendor/bin/parallel-lint php/ tests/test_php_api.php tests/test_nrf_cloud.php && \
-		vendor/bin/phpstan analyse; \
+		php/vendor/bin/parallel-lint php/ tests/test_php_api.php tests/test_nrf_cloud.php && \
+		cd php && vendor/bin/phpstan analyse; \
 	else \
 		echo "(skip PHP lint, php not installed)"; \
 	fi

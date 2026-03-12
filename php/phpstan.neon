@@ -1,0 +1,6 @@
+parameters:
+    level: 8
+    paths:
+        - .
+        - ../tests/test_php_api.php
+        - ../tests/test_nrf_cloud.php

@@ -1,6 +1,0 @@
-parameters:
-    level: 8
-    paths:
-        - php
-        - tests/test_php_api.php
-        - tests/test_nrf_cloud.php

@@ -46,6 +46,11 @@ jobs:
       - name: Build
         run: make
 
+      - name: PHP lint and static analysis
+        run: |
+          composer install --working-dir=php --no-interaction --quiet
+          make lint-php
+
       - name: Unit tests
         run: make test
 

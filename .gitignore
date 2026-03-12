@@ -22,7 +22,7 @@ asn1/liblpp_asn1.*
 asn1/libulp_asn1.*
 
 # PHP dependencies
-/vendor/
+php/vendor/
 
 # SQLite databases
 *.db
