@@ -12,18 +12,48 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev zlib1g-dev
+          sudo apt-get install -y libcurl4-openssl-dev zlib1g-dev \
+            libsqlite3-dev libevent-dev libssl-dev libcjson-dev \
+            automake libtool bison flex
+
+      - name: Cache asn1c
+        id: cache-asn1c
+        uses: actions/cache@v5
+        with:
+          path: |
+            /usr/local/bin/asn1c
+            /usr/local/share/asn1c
+          key: asn1c-mouse07410-${{ runner.os }}
+
+      - name: Build and install asn1c
+        if: steps.cache-asn1c.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/mouse07410/asn1c.git /tmp/asn1c
+          cd /tmp/asn1c
+          test -f configure || autoreconf -iv
+          ./configure
+          make -j$(nproc)
+          sudo make install
+
+      - name: Generate ASN.1 sources
+        run: make -C asn1 regenerate
 
       - name: Build
         run: make
+
+      - name: Build SUPL components
+        run: make supl_server tests/supl_client
 
       - name: Unit tests
         run: make test
 
       - name: Integration test (download + parse)
         run: make test-integration
+
+      - name: SUPL structural comparison test
+        run: make test-supl
