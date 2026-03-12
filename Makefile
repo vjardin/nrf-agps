@@ -3,39 +3,46 @@ CFLAGS  = -Wall -Wextra -std=c11 -O2 -D_GNU_SOURCE \
           $(shell pkg-config --cflags libcurl sqlite3)
 LDFLAGS = $(shell pkg-config --libs libcurl sqlite3) -lz -lm
 
-SRCS = main.c rinex.c codegen.c almanac.c sqlitedb.c
-OBJS = $(SRCS:.c=.o)
-BIN  = rinex_dl
+LIB_CFLAGS = $(CFLAGS) -Ilib
+
+LIB_SRCS = lib/rinex.c lib/codegen.c lib/almanac.c lib/sqlitedb.c
+LIB_OBJS = $(LIB_SRCS:.c=.o)
+BIN      = rinex_dl/rinex_dl
 
 all: $(BIN) supl_server tests/supl_client
 
-$(BIN): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+$(BIN): rinex_dl/rinex_main.o $(LIB_OBJS)
+	$(CC) $(LIB_CFLAGS) -o $@ $^ $(LDFLAGS)
 
-%.o: %.c gps_assist.h rinex.h codegen.h almanac.h sqlitedb.h
-	$(CC) $(CFLAGS) -c $<
+rinex_dl/rinex_main.o: rinex_dl/rinex_main.c lib/gps_assist.h lib/rinex.h \
+                        lib/codegen.h lib/almanac.h lib/sqlitedb.h
+	$(CC) $(LIB_CFLAGS) -c -o $@ $<
+
+lib/%.o: lib/%.c lib/gps_assist.h lib/rinex.h lib/codegen.h lib/almanac.h \
+         lib/sqlitedb.h
+	$(CC) $(LIB_CFLAGS) -c -o $@ $<
 
 # --- Tests ---
 
-TEST_CFLAGS = $(CFLAGS) -I . -I tests/
+TEST_CFLAGS = $(CFLAGS) -Ilib -Itests/
 
-tests/test_rinex: tests/test_rinex.c rinex.c gps_assist.h rinex.h
-	$(CC) $(TEST_CFLAGS) -o $@ tests/test_rinex.c rinex.c $(LDFLAGS)
+tests/test_rinex: tests/test_rinex.c lib/rinex.c lib/gps_assist.h lib/rinex.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_rinex.c lib/rinex.c $(LDFLAGS)
 
-tests/test_nrf_convert: tests/test_nrf_convert.c gps_assist_nrf.c \
-                        gps_assist.h gps_assist_nrf.h tests/nrf_modem_gnss.h
-	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_convert.c gps_assist_nrf.c -lm
+tests/test_nrf_convert: tests/test_nrf_convert.c lib/gps_assist_nrf.c \
+                        lib/gps_assist.h lib/gps_assist_nrf.h tests/nrf_modem_gnss.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_convert.c lib/gps_assist_nrf.c -lm
 
-tests/test_almanac: tests/test_almanac.c almanac.c gps_assist.h almanac.h
-	$(CC) $(TEST_CFLAGS) -o $@ tests/test_almanac.c almanac.c $(LDFLAGS)
+tests/test_almanac: tests/test_almanac.c lib/almanac.c lib/gps_assist.h lib/almanac.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_almanac.c lib/almanac.c $(LDFLAGS)
 
-tests/test_sqlitedb: tests/test_sqlitedb.c sqlitedb.c gps_assist.h sqlitedb.h
-	$(CC) $(TEST_CFLAGS) -o $@ tests/test_sqlitedb.c sqlitedb.c \
+tests/test_sqlitedb: tests/test_sqlitedb.c lib/sqlitedb.c lib/gps_assist.h lib/sqlitedb.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_sqlitedb.c lib/sqlitedb.c \
 		$(shell pkg-config --libs sqlite3)
 
-tests/test_nrf_cloud_cross: tests/test_nrf_cloud_cross.c gps_assist_nrf.c \
-                            gps_assist.h gps_assist_nrf.h tests/nrf_modem_gnss.h
-	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_cloud_cross.c gps_assist_nrf.c -lm
+tests/test_nrf_cloud_cross: tests/test_nrf_cloud_cross.c lib/gps_assist_nrf.c \
+                            lib/gps_assist.h lib/gps_assist_nrf.h tests/nrf_modem_gnss.h
+	$(CC) $(TEST_CFLAGS) -o $@ tests/test_nrf_cloud_cross.c lib/gps_assist_nrf.c -lm
 
 asn1/liblpp_asn1.so asn1/libulp_asn1.so:
 	$(MAKE) -C asn1
@@ -48,18 +55,18 @@ ULP_LDFLAGS = -Lasn1 -lulp_asn1
 SUPL_LDFLAGS = $(LPP_LDFLAGS) $(ULP_LDFLAGS) \
 	$(shell pkg-config --libs sqlite3 libevent libevent_openssl openssl)
 
-tests/test_lpp: tests/test_lpp.c lpp_builder.c lpp_builder.h gps_assist.h \
+tests/test_lpp: tests/test_lpp.c lib/lpp_builder.c lib/lpp_builder.h lib/gps_assist.h \
                 asn1/liblpp_asn1.so
-	$(CC) $(LPP_CFLAGS) -o $@ tests/test_lpp.c lpp_builder.c $(LPP_LDFLAGS)
+	$(CC) $(LPP_CFLAGS) -o $@ tests/test_lpp.c lib/lpp_builder.c $(LPP_LDFLAGS)
 
 # --- SUPL server ---
 
-supl_server: supl_main.c supl_server.c supl_codec.c lpp_builder.c sqlitedb.c \
-             supl_server.h supl_codec.h lpp_builder.h sqlitedb.h gps_assist.h \
-             asn1/liblpp_asn1.so asn1/libulp_asn1.so
-	$(CC) $(LPP_CFLAGS) $(ULP_CFLAGS) -o $@ \
-		supl_main.c supl_server.c supl_codec.c lpp_builder.c sqlitedb.c \
-		$(SUPL_LDFLAGS)
+supl_server: supl/supl_main.c supl/supl_server.c lib/supl_codec.c lib/lpp_builder.c \
+             lib/sqlitedb.c supl/supl_server.h lib/supl_codec.h lib/lpp_builder.h \
+             lib/sqlitedb.h lib/gps_assist.h asn1/liblpp_asn1.so asn1/libulp_asn1.so
+	$(CC) $(LPP_CFLAGS) $(ULP_CFLAGS) -Isupl -o $@ \
+		supl/supl_main.c supl/supl_server.c lib/supl_codec.c lib/lpp_builder.c \
+		lib/sqlitedb.c $(SUPL_LDFLAGS)
 
 tests/supl_client: tests/supl_client.c asn1/libulp_asn1.so asn1/liblpp_asn1.so
 	$(CC) $(LPP_CFLAGS) $(ULP_CFLAGS) -o $@ tests/supl_client.c \
@@ -102,7 +109,8 @@ test-integration: tests/test_rinex tests/test_nrf_convert
 	./tests/test_nrf_convert
 
 clean:
-	rm -f $(OBJS) $(BIN) gps_assist_data.c supl_server
+	rm -f lib/*.o rinex_dl/*.o
+	rm -f rinex_dl/rinex_dl supl_server gps_assist_data.c
 	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
 	     tests/test_nrf_cloud_cross tests/test_lpp tests/supl_client
 	$(MAKE) -C asn1 distclean
@@ -115,4 +123,4 @@ lint-php:
 		echo "(skip PHP lint, php not installed)"; \
 	fi
 
-.PHONY: all clean test test-integration lint-php
+.PHONY: all clean test test-integration test-supl lint-php

@@ -1,6 +1,6 @@
 # Build artifacts
 *.o
-rinex_dl
+rinex_dl/rinex_dl
 supl_server
 
 # Generated source

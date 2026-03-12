@@ -37,7 +37,7 @@ export LD_LIBRARY_PATH="$ROOT_DIR/asn1"
 
 # Step 1: Download BRDC and build SQLite DB
 echo "=== Downloading BRDC data ==="
-if ! "$ROOT_DIR/rinex_dl" -s "$DB_PATH" 2>&1; then
+if ! "$ROOT_DIR/rinex_dl/rinex_dl" -s "$DB_PATH" 2>&1; then
 	echo "(skip: BRDC download failed, network unavailable?)"
 	exit 0
 fi

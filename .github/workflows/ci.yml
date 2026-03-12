@@ -46,9 +46,6 @@ jobs:
       - name: Build
         run: make
 
-      - name: Build SUPL components
-        run: make supl_server tests/supl_client
-
       - name: Unit tests
         run: make test
 

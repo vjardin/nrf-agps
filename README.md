@@ -50,7 +50,7 @@ make supl_server tests/supl_client
 ## Usage
 
 ```
-./rinex_dl [options]
+./rinex_dl/rinex_dl [options]
 
 Options:
   -d YYYY-MM-DD  Date to download (default: yesterday)
@@ -81,34 +81,34 @@ derived almanac is used.
 
 ```sh
 # Download yesterday's broadcast ephemeris (default)
-./rinex_dl
+./rinex_dl/rinex_dl
 
 # Specific date
-./rinex_dl -d 2026-03-08
+./rinex_dl/rinex_dl -d 2026-03-08
 
 # Parse a local RINEX file
-./rinex_dl -f /path/to/BRDC00IGS_R_20260680000_01D_MN.rnx.gz
+./rinex_dl/rinex_dl -f /path/to/BRDC00IGS_R_20260680000_01D_MN.rnx.gz
 
 # Custom output path
-./rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+./rinex_dl/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
 
 # Override default location (e.g. Berlin)
-./rinex_dl -l 52.5200,13.4050
+./rinex_dl/rinex_dl -l 52.5200,13.4050
 
 # Download SEM almanac from NAVCEN instead of deriving from ephemeris
-./rinex_dl -a sem
+./rinex_dl/rinex_dl -a sem
 
 # Use a local SEM almanac file
-./rinex_dl -a sem:/path/to/current_sem.al3
+./rinex_dl/rinex_dl -a sem:/path/to/current_sem.al3
 
 # Use a local YUMA almanac file
-./rinex_dl -a yuma:/path/to/almanac.yuma
+./rinex_dl/rinex_dl -a yuma:/path/to/almanac.yuma
 
 # Store to SQLite database (instead of C source)
-./rinex_dl -s /var/lib/agnss/rinex.db
+./rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db
 
 # SQLite with SEM almanac
-./rinex_dl -s /var/lib/agnss/rinex.db -a sem
+./rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db -a sem
 ```
 
 The tool downloads the combined BRDC navigation file from
@@ -122,9 +122,9 @@ populates a SQLite database (`-s`).
 # /etc/cron.d/rinex-agps
 # Run at 02:00 UTC daily — yesterday's BRDC file is complete by then
 # C source output:
-0 2 * * * user /path/to/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+0 2 * * * user /path/to/rinex_dl/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
 # SQLite output (for REST API serving):
-0 2 * * * user /path/to/rinex_dl -s /var/lib/agnss/rinex.db
+0 2 * * * user /path/to/rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db
 ```
 
 ## PHP REST API
@@ -145,7 +145,7 @@ First, populate the database, then start the PHP built-in server:
 
 ```sh
 # 1. Fetch yesterday's ephemeris into a SQLite database
-./rinex_dl -s agnss.db
+./rinex_dl/rinex_dl -s agnss.db
 
 # 2. Start the server (listens on port 8080)
 AGNSS_DB_PATH=agnss.db php -S localhost:8080 php/index.php
@@ -388,7 +388,7 @@ regenerated from the ASN.1 specs:
 
 The encoder builds a complete LPP message from `gps_assist_data`:
 
-| LPP IE                     | Source                                      |
+| LPP IE                      | Source                                      |
 |-----------------------------|---------------------------------------------|
 | NAV ephemeris (per GPS SV)  | RINEX broadcast ephemeris, GPS ICD scales   |
 | NAV ephemeris (per QZSS SV) | RINEX QZSS records, 0-based SV-ID from 193  |
@@ -425,7 +425,7 @@ SQLite database populated by `rinex_dl -s`.
 
 ```sh
 # 1. Populate the database
-./rinex_dl -s agnss.db
+./rinex_dl/rinex_dl -s agnss.db
 
 # 2. Start the SUPL server (plain TCP, port 7276)
 LD_LIBRARY_PATH=asn1 ./supl_server -d agnss.db -p 7276
@@ -465,12 +465,12 @@ SUPL servers.
 
 Copy these files into your Zephyr project `src/` directory:
 
-| File                | Role                                                                     |
-|---------------------|--------------------------------------------------------------------------|
-| `gps_assist.h`      | Struct definitions (portable, no Zephyr dependency)                      |
-| `gps_assist_nrf.h`  | Injection API declaration                                                |
-| `gps_assist_nrf.c`  | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agnss_write()` |
-| `gps_assist_data.c` | Generated — const ephemeris, iono, UTC data                              |
+| File                    | Role                                                                     |
+|-------------------------|--------------------------------------------------------------------------|
+| `lib/gps_assist.h`      | Struct definitions (portable, no Zephyr dependency)                      |
+| `lib/gps_assist_nrf.h`  | Injection API declaration                                                |
+| `lib/gps_assist_nrf.c`  | Converts doubles to GPS ICD format, calls `nrf_modem_gnss_agnss_write()` |
+| `gps_assist_data.c`     | Generated — const ephemeris, iono, UTC data                              |
 
 In your firmware, after modem initialisation and before starting a GNSS fix:
 
@@ -550,7 +550,7 @@ RINEX (doubles, radians) -> GPS ICD (scaled integers, semi-circles)
                          -> nrf_modem_gnss_agnss_write()
 ```
 
-The scale factors used in `gps_assist_nrf.c` match IS-GPS-200
+The scale factors used in `lib/gps_assist_nrf.c` match IS-GPS-200
 Table 20-I/III/IX/X exactly (e.g. M0 is scaled by 1/2<<31 semi-circles,
 af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 
@@ -603,7 +603,7 @@ ephemeris ranges (sqrt_A, eccentricity, toe).
 ### test_nrf_convert
 
 Tests the GPS ICD conversion using a mock `nrf_modem_gnss.h` (in
-`tests/`) so `gps_assist_nrf.c` compiles on the build host. Verifies:
+`tests/`) so `lib/gps_assist_nrf.c` compiles on the build host. Verifies:
 
 - `nrf_modem_gnss_agnss_write()` is called with correct types
   (`EPHEMERIDES`, `KLOBUCHAR`, `UTC`) and buffer sizes
