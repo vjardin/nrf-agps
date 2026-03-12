@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (C) 2026 Free Mobile
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
 # Generate ASN.1 C sources using asn1c (mouse07410/asn1c v1.4+).
 #
 # Usage: generate.sh <output-dir> <spec-files...>

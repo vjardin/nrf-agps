@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Free Mobile
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 fs = import('fs')
 
 asn1c = find_program('asn1c', required : false)
