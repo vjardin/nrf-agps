@@ -30,11 +30,25 @@ ULP_SONAME  = libulp_asn1.so
 
 all: $(LPP_SONAME) $(ULP_SONAME)
 
+# If generated dirs are missing, regenerate first then re-exec make
+# so $(wildcard) picks up the new .c files.
+ifeq ($(LPP_SRCS),)
+$(LPP_SONAME):
+	$(MAKE) regenerate-lpp
+	$(MAKE) $@
+else
 $(LPP_SONAME): $(LPP_OBJS)
 	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+endif
 
+ifeq ($(ULP_SRCS),)
+$(ULP_SONAME):
+	$(MAKE) regenerate-ulp
+	$(MAKE) $@
+else
 $(ULP_SONAME): $(ULP_OBJS)
 	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+endif
 
 $(LPP_GEN_DIR)/%.o: $(LPP_GEN_DIR)/%.c
 	$(CC) $(CFLAGS) -fPIC -I$(LPP_GEN_DIR) -DASN_DISABLE_OER_SUPPORT \

@@ -7,7 +7,7 @@ SRCS = main.c rinex.c codegen.c almanac.c sqlitedb.c
 OBJS = $(SRCS:.c=.o)
 BIN  = rinex_dl
 
-all: $(BIN)
+all: $(BIN) supl_server tests/supl_client
 
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -105,7 +105,7 @@ clean:
 	rm -f $(OBJS) $(BIN) gps_assist_data.c supl_server
 	rm -f tests/test_rinex tests/test_nrf_convert tests/test_almanac tests/test_sqlitedb \
 	     tests/test_nrf_cloud_cross tests/test_lpp tests/supl_client
-	$(MAKE) -C asn1 clean
+	$(MAKE) -C asn1 distclean
 
 lint-php:
 	@if command -v php >/dev/null 2>&1; then \
