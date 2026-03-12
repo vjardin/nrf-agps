@@ -1,22 +1,50 @@
-# rinex_dl — Offline A-GNSS data generator for nRF9151
+# rinex_dl — Offline A-GNSS data generator and SUPL 2.0 server for nRF9151
 
 [![CI](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml/badge.svg)](https://github.com/vjardin/nrf-agps/actions/workflows/ci.yml)
 
 Downloads daily GPS broadcast ephemeris from public RINEX sources and
-generates a C file with satellite orbital parameters. The generated file
-is compiled and linked into a Zephyr firmware to provide Assisted GPS on
-the nRF9151, providing helpers to reduce Time To First Fix (TTFF).
+provides multiple delivery paths for Assisted GNSS data to reduce
+Time To First Fix (TTFF) on the nRF9151:
+
+| Component        | Description                                            |
+|------------------|--------------------------------------------------------|
+| `rinex_dl`       | Downloads RINEX, generates C source or SQLite database |
+| `supl_server`    | OMA SUPL 2.0 server with 3GPP LPP assistance data      |
+| `php/`           | JSON REST API + nRF Cloud binary A-GNSS endpoint       |
+| `tests/supl_client` | SUPL 2.0 diagnostic client with JSON export         |
 
 ## Build
 
-Dependencies: `libcurl-dev`, `zlib-dev`, `libsqlite3-dev`, `pkg-config`.
-Optional (for LPP encoder): [mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+.
+### rinex_dl (core tool)
 
-```
+Dependencies: `libcurl-dev`, `zlib-dev`, `libsqlite3-dev`, `pkg-config`.
+
+```sh
 # Debian/Ubuntu
 sudo apt install libcurl4-openssl-dev zlib1g-dev libsqlite3-dev pkg-config
 
 make
+```
+
+### SUPL server and client
+
+Additional dependencies: `libevent-dev`, `libssl-dev`, `libcjson-dev`,
+and [mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+
+(the Debian/Ubuntu `asn1c` package is too old).
+
+```sh
+# Debian/Ubuntu
+sudo apt install libsqlite3-dev libevent-dev libssl-dev libcjson-dev
+
+# Build and install asn1c from source
+git clone https://github.com/mouse07410/asn1c.git
+cd asn1c && test -f configure || autoreconf -iv
+./configure && make && sudo make install
+cd -
+
+# Generate ASN.1 codec sources and build
+make -C asn1 regenerate
+make supl_server tests/supl_client
 ```
 
 ## Usage
@@ -134,7 +162,7 @@ are routed correctly.
 
 | Parameter       | Values                               | Default |
 |-----------------|--------------------------------------|---------|
-| `types`         | `ephe,alm,iono,utc,loc` (any combo) | all     |
+| `types`         | `ephe,alm,iono,utc,loc` (any combo)  | all     |
 | `prn`           | Comma-separated PRN numbers          | all     |
 | `constellation` | `GPS`, `QZSS`                        | all     |
 | `dataset`       | Metadata ID                          | latest  |
@@ -346,31 +374,15 @@ TS 37.355 LPP `ProvideAssistanceData` messages using UPER (Unaligned
 Packed Encoding Rules). This is the standard encoding used by LTE
 modems for network-assisted GNSS via the LPP protocol.
 
-### Prerequisites
+### ASN.1 codec
 
-The ASN.1 codec is built from the 3GPP LPP ASN.1 specification using
-[mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+:
+See the [Build](#supl-server-and-client) section for asn1c installation
+and codec generation. The generated C/H files in `asn1/generated/` and
+`asn1/generated-ulp/` are not committed — they are build artifacts
+regenerated from the ASN.1 specs:
 
-```sh
-# Install asn1c from source (the Debian/Ubuntu apt package is too old)
-git clone https://github.com/mouse07410/asn1c.git
-cd asn1c && autoreconf -iv && ./configure && make && sudo make install
-```
-
-### Building the ASN.1 codec
-
-```sh
-# Generate C sources from the 3GPP ASN.1 spec (only needed once,
-# or after modifying asn1/specs/LPP.asn)
-make -C asn1 regenerate
-
-# Build the shared library
-make asn1/liblpp_asn1.so
-```
-
-The generated C/H files in `asn1/generated/` are gitignored — they are
-a build artifact. Only the ASN.1 spec (`asn1/specs/LPP.asn`, 3GPP
-TS 37.355 Release 16.4) is committed.
+- `asn1/specs/LPP.asn` — 3GPP TS 37.355 Release 16.4 (LPP)
+- `asn1/specs/ulp/*.asn` — OMA SUPL 2.0 (ULP)
 
 ### What it encodes
 
@@ -379,12 +391,12 @@ The encoder builds a complete LPP message from `gps_assist_data`:
 | LPP IE                     | Source                                      |
 |-----------------------------|---------------------------------------------|
 | NAV ephemeris (per GPS SV)  | RINEX broadcast ephemeris, GPS ICD scales   |
-| NAV ephemeris (per QZSS SV) | RINEX QZSS records, 0-based SV-ID from 193 |
+| NAV ephemeris (per QZSS SV) | RINEX QZSS records, 0-based SV-ID from 193  |
 | NAV almanac                 | SEM/YUMA parsed almanac                     |
 | Klobuchar ionospheric model | RINEX header GPSA/GPSB                      |
 | UTC ModelSet1               | RINEX header GPUT                           |
 | GNSS reference time         | GPS days/seconds since epoch                |
-| Reference location          | Ellipsoid point with altitude + uncertainty  |
+| Reference location          | Ellipsoid point with altitude + uncertainty |
 
 The scale factors match IS-GPS-200 Table 20-I/III/IX/X exactly — the
 same conversions used by the nRF modem binary format.
@@ -401,6 +413,53 @@ The test encodes known assistance data (2 GPS SVs, 1 QZSS SV,
 almanac, ionosphere, UTC, location) to UPER, decodes back, and
 verifies all 66 fields match. An empty-data test validates encoding
 without satellite data.
+
+## SUPL 2.0 server
+
+The `supl_server` implements an OMA SUPL 2.0 Location Platform (SLP) that
+serves A-GNSS assistance data to modems using the standard SUPL/LPP
+protocol. It reads ephemeris, almanac, ionospheric and UTC data from a
+SQLite database populated by `rinex_dl -s`.
+
+### Running
+
+```sh
+# 1. Populate the database
+./rinex_dl -s agnss.db
+
+# 2. Start the SUPL server (plain TCP, port 7276)
+LD_LIBRARY_PATH=asn1 ./supl_server -d agnss.db -p 7276
+
+# With TLS (requires certificate and key)
+LD_LIBRARY_PATH=asn1 ./supl_server -d agnss.db -c cert.pem -k key.pem
+```
+
+The server handles the full SUPL session flow: SUPL START → RESPONSE →
+POS INIT → POS (LPP ProvideAssistanceData) → END. The LPP payload
+includes GPS/QZSS ephemeris, Klobuchar ionosphere, UTC model, reference
+time and reference location.
+
+### SUPL diagnostic client
+
+The `tests/supl_client` is a standalone SUPL 2.0 client for testing and
+validation. It runs a complete SUPL session and optionally exports the
+decoded LPP assistance data as JSON.
+
+```sh
+# Test against local server (plain TCP)
+LD_LIBRARY_PATH=asn1 ./tests/supl_client -h 127.0.0.1 -p 7276
+
+# Test against Google SUPL (TLS)
+LD_LIBRARY_PATH=asn1 ./tests/supl_client -h supl.google.com -p 7275 -t
+
+# Export decoded LPP data to JSON
+LD_LIBRARY_PATH=asn1 ./tests/supl_client -h 127.0.0.1 -p 7276 -o assist.json
+```
+
+The JSON output contains `commonAssistData` (reference time, reference
+location, ionospheric model) and `genericAssistData` (per-GNSS navigation
+models, UTC model) — the same structure for both local and third-party
+SUPL servers.
 
 ## Zephyr integration
 
@@ -500,7 +559,7 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 | Type               | nRF modem constant                                      | Source                             |
 |--------------------|---------------------------------------------------------|------------------------------------|
 | Ephemeris (per SV) | `NRF_MODEM_GNSS_AGNSS_GPS_EPHEMERIDES`                  | RINEX nav records                  |
-| Klobuchar iono     | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB`        |
+| Klobuchar iono     | `NRF_MODEM_GNSS_AGNSS_KLOBUCHAR_IONOSPHERIC_CORRECTION` | RINEX header `GPSA`/`GPSB`         |
 | UTC parameters     | `NRF_MODEM_GNSS_AGNSS_GPS_UTC_PARAMETERS`               | RINEX header `GPUT`                |
 | GPS system time    | `NRF_MODEM_GNSS_AGNSS_GPS_SYSTEM_CLOCK_AND_TOWS`        | Generation timestamp               |
 | Almanac (per SV)   | `NRF_MODEM_GNSS_AGNSS_GPS_ALMANAC`                      | SEM/YUMA or derived from ephemeris |
@@ -514,7 +573,16 @@ make test
 
 # Unit + integration tests (downloads from BKG IGS)
 make test-integration
+
+# SUPL structural comparison test (requires network)
+make test-supl
 ```
+
+The `test-supl` target runs a full end-to-end validation: downloads BRDC
+data, starts the local SUPL server, runs the client against both
+`127.0.0.1` and `supl.google.com`, then compares the decoded LPP JSON
+outputs for structural consistency (schema, SV counts, model types, leap
+seconds). Network failures cause a graceful skip, not a test failure.
 
 ### test_rinex
 
