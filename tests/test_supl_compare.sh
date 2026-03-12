@@ -18,6 +18,12 @@ set -e
 SCRIPT_DIR=$(dirname "$0")
 ROOT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
+# Accept binary paths from environment (for out-of-source builds like Meson),
+# fall back to in-source layout.
+RINEX_DL="${RINEX_DL:-$ROOT_DIR/rinex_dl/rinex_dl}"
+SUPL_SERVER="${SUPL_SERVER:-$ROOT_DIR/supl_server}"
+SUPL_CLIENT="${SUPL_CLIENT:-$ROOT_DIR/tests/supl_client}"
+
 DB_PATH="/tmp/test_supl_$$.db"
 LOCAL_JSON="/tmp/supl_local_$$.json"
 GOOGLE_JSON="/tmp/supl_google_$$.json"
@@ -37,14 +43,14 @@ export LD_LIBRARY_PATH="$ROOT_DIR/asn1"
 
 # Step 1: Download BRDC and build SQLite DB
 echo "=== Downloading BRDC data ==="
-if ! "$ROOT_DIR/rinex_dl/rinex_dl" -s "$DB_PATH" 2>&1; then
+if ! "$RINEX_DL" -s "$DB_PATH" 2>&1; then
 	echo "(skip: BRDC download failed, network unavailable?)"
 	exit 0
 fi
 
 # Step 2: Start local SUPL server
 echo "=== Starting local SUPL server ==="
-"$ROOT_DIR/supl_server" -d "$DB_PATH" --no-tls -p "$PORT" &
+"$SUPL_SERVER" -d "$DB_PATH" --no-tls -p "$PORT" &
 SERVER_PID=$!
 
 # Wait for server to be ready
@@ -63,7 +69,7 @@ fi
 
 # Step 3: SUPL session against local server
 echo "=== SUPL client -> local server ==="
-if ! "$ROOT_DIR/tests/supl_client" -h 127.0.0.1 -p "$PORT" \
+if ! "$SUPL_CLIENT" -h 127.0.0.1 -p "$PORT" \
 	-o "$LOCAL_JSON" 2>&1; then
 	echo "FAIL: local SUPL session failed"
 	exit 1
@@ -77,7 +83,7 @@ fi
 # Step 4: SUPL session against Google (may fail due to network)
 echo "=== SUPL client -> supl.google.com ==="
 GOOGLE_OK=0
-if "$ROOT_DIR/tests/supl_client" --tls -h supl.google.com \
+if "$SUPL_CLIENT" --tls -h supl.google.com \
 	-o "$GOOGLE_JSON" 2>&1; then
 	if [ -s "$GOOGLE_JSON" ]; then
 		GOOGLE_OK=1

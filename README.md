@@ -15,42 +15,51 @@ Time To First Fix (TTFF) on the nRF9151:
 
 ## Build
 
-### rinex_dl (core tool)
-
-Dependencies: `libcurl-dev`, `zlib-dev`, `libsqlite3-dev`, `pkg-config`.
+### Dependencies
 
 ```sh
-# Debian/Ubuntu
-sudo apt install libcurl4-openssl-dev zlib1g-dev libsqlite3-dev pkg-config
+# Debian/Ubuntu — core (rinex_dl)
+sudo apt install libcurl4-openssl-dev zlib1g-dev libsqlite3-dev \
+  pkg-config meson ninja-build
 
-make
+# SUPL server and client (additional)
+sudo apt install libevent-dev libssl-dev libcjson-dev
 ```
 
-### SUPL server and client
-
-Additional dependencies: `libevent-dev`, `libssl-dev`, `libcjson-dev`,
-and [mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+
-(the Debian/Ubuntu `asn1c` package is too old).
+The SUPL components also require
+[mouse07410/asn1c](https://github.com/mouse07410/asn1c) v1.4+
+(the Debian/Ubuntu `asn1c` package is too old):
 
 ```sh
-# Debian/Ubuntu
-sudo apt install libsqlite3-dev libevent-dev libssl-dev libcjson-dev
-
-# Build and install asn1c from source
 git clone https://github.com/mouse07410/asn1c.git
 cd asn1c && test -f configure || autoreconf -iv
 ./configure && make && sudo make install
 cd -
+```
 
-# Generate ASN.1 codec sources and build
-make -C asn1 regenerate
-make supl_server tests/supl_client
+### Compiling
+
+```sh
+meson setup builddir
+meson compile -C builddir
+```
+
+Meson builds all targets whose dependencies are satisfied. If SUPL
+libraries (libevent, OpenSSL) are missing, `rinex_dl` is still built
+but `supl_server` and `supl_client` are skipped.
+
+ASN.1 codec sources (`asn1/generated/`, `asn1/generated-ulp/`) are
+auto-generated at configure time when the directories are missing and
+`asn1c` is installed. To regenerate explicitly:
+
+```sh
+ninja -C builddir regenerate-asn1
 ```
 
 ## Usage
 
 ```
-./rinex_dl/rinex_dl [options]
+./builddir/rinex_dl [options]
 
 Options:
   -d YYYY-MM-DD  Date to download (default: yesterday)
@@ -81,34 +90,34 @@ derived almanac is used.
 
 ```sh
 # Download yesterday's broadcast ephemeris (default)
-./rinex_dl/rinex_dl
+./builddir/rinex_dl
 
 # Specific date
-./rinex_dl/rinex_dl -d 2026-03-08
+./builddir/rinex_dl -d 2026-03-08
 
 # Parse a local RINEX file
-./rinex_dl/rinex_dl -f /path/to/BRDC00IGS_R_20260680000_01D_MN.rnx.gz
+./builddir/rinex_dl -f /path/to/BRDC00IGS_R_20260680000_01D_MN.rnx.gz
 
 # Custom output path
-./rinex_dl/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+./builddir/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
 
 # Override default location (e.g. Berlin)
-./rinex_dl/rinex_dl -l 52.5200,13.4050
+./builddir/rinex_dl -l 52.5200,13.4050
 
 # Download SEM almanac from NAVCEN instead of deriving from ephemeris
-./rinex_dl/rinex_dl -a sem
+./builddir/rinex_dl -a sem
 
 # Use a local SEM almanac file
-./rinex_dl/rinex_dl -a sem:/path/to/current_sem.al3
+./builddir/rinex_dl -a sem:/path/to/current_sem.al3
 
 # Use a local YUMA almanac file
-./rinex_dl/rinex_dl -a yuma:/path/to/almanac.yuma
+./builddir/rinex_dl -a yuma:/path/to/almanac.yuma
 
 # Store to SQLite database (instead of C source)
-./rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db
+./builddir/rinex_dl -s /var/lib/agnss/rinex.db
 
 # SQLite with SEM almanac
-./rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db -a sem
+./builddir/rinex_dl -s /var/lib/agnss/rinex.db -a sem
 ```
 
 The tool downloads the combined BRDC navigation file from
@@ -122,9 +131,9 @@ populates a SQLite database (`-s`).
 # /etc/cron.d/rinex-agps
 # Run at 02:00 UTC daily — yesterday's BRDC file is complete by then
 # C source output:
-0 2 * * * user /path/to/rinex_dl/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
+0 2 * * * user /path/to/builddir/rinex_dl -o /path/to/zephyr_project/src/gps_assist_data
 # SQLite output (for REST API serving):
-0 2 * * * user /path/to/rinex_dl/rinex_dl -s /var/lib/agnss/rinex.db
+0 2 * * * user /path/to/builddir/rinex_dl -s /var/lib/agnss/rinex.db
 ```
 
 ## PHP REST API
@@ -145,7 +154,7 @@ First, populate the database, then start the PHP built-in server:
 
 ```sh
 # 1. Fetch yesterday's ephemeris into a SQLite database
-./rinex_dl/rinex_dl -s agnss.db
+./builddir/rinex_dl -s agnss.db
 
 # 2. Start the server (listens on port 8080)
 AGNSS_DB_PATH=agnss.db php -S localhost:8080 php/index.php
@@ -404,9 +413,7 @@ same conversions used by the nRF modem binary format.
 ### Testing
 
 ```sh
-# Build and run the LPP round-trip test
-make tests/test_lpp
-LD_LIBRARY_PATH=asn1 ./tests/test_lpp
+meson test -C builddir lpp -v
 ```
 
 The test encodes known assistance data (2 GPS SVs, 1 QZSS SV,
@@ -425,13 +432,13 @@ SQLite database populated by `rinex_dl -s`.
 
 ```sh
 # 1. Populate the database
-./rinex_dl/rinex_dl -s agnss.db
+./builddir/rinex_dl -s agnss.db
 
 # 2. Start the SUPL server (plain TCP, port 7276)
-LD_LIBRARY_PATH=asn1 ./supl_server -d agnss.db -p 7276
+./builddir/supl_server -d agnss.db -p 7276
 
 # With TLS (requires certificate and key)
-LD_LIBRARY_PATH=asn1 ./supl_server -d agnss.db -c cert.pem -k key.pem
+./builddir/supl_server -d agnss.db -c cert.pem -k key.pem
 ```
 
 The server handles the full SUPL session flow: SUPL START → RESPONSE →
@@ -447,13 +454,13 @@ decoded LPP assistance data as JSON.
 
 ```sh
 # Test against local server (plain TCP)
-LD_LIBRARY_PATH=asn1 ./tests/supl_client -h 127.0.0.1 -p 7276
+./builddir/tests/supl_client -h 127.0.0.1 -p 7276
 
 # Test against Google SUPL (TLS)
-LD_LIBRARY_PATH=asn1 ./tests/supl_client -h supl.google.com -p 7275 -t
+./builddir/tests/supl_client -h supl.google.com -p 7275 -t
 
 # Export decoded LPP data to JSON
-LD_LIBRARY_PATH=asn1 ./tests/supl_client -h 127.0.0.1 -p 7276 -o assist.json
+./builddir/tests/supl_client -h 127.0.0.1 -p 7276 -o assist.json
 ```
 
 The JSON output contains `commonAssistData` (reference time, reference
@@ -569,16 +576,20 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 
 ```sh
 # Unit tests (no network required)
-make test
+meson test -C builddir --no-suite integration --no-suite lint -v
 
-# Unit + integration tests (downloads from BKG IGS)
-make test-integration
+# Integration tests (downloads from BKG IGS)
+meson test -C builddir --suite integration -v
 
-# SUPL structural comparison test (requires network)
-make test-supl
+# PHP lint and static analysis
+composer install --working-dir=php
+meson test -C builddir --suite lint -v
+
+# All tests
+meson test -C builddir -v
 ```
 
-The `test-supl` target runs a full end-to-end validation: downloads BRDC
+The `supl_compare` integration test runs a full end-to-end validation: downloads BRDC
 data, starts the local SUPL server, runs the client against both
 `127.0.0.1` and `supl.google.com`, then compares the decoded LPP JSON
 outputs for structural consistency (schema, SV counts, model types, leap
@@ -632,7 +643,7 @@ Tests the SQLite storage layer using in-memory test data:
 
 ### test_lpp
 
-Round-trip test for the LPP UPER encoder (requires `asn1/liblpp_asn1.so`):
+Round-trip test for the LPP UPER encoder (requires `liblpp_asn1.so`):
 
 - Encode: builds LPP ProvideAssistanceData from test data (2 GPS + 1 QZSS
   ephemeris, 1 almanac, Klobuchar iono, UTC, location)

@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev zlib1g-dev \
             libsqlite3-dev libevent-dev libssl-dev libcjson-dev \
-            automake libtool bison flex
+            automake libtool bison flex meson ninja-build
 
       - name: Cache asn1c
         id: cache-asn1c
@@ -40,22 +40,19 @@ jobs:
           make -j$(nproc)
           sudo make install
 
-      - name: Generate ASN.1 sources
-        run: make -C asn1 regenerate
+      - name: Configure
+        run: meson setup builddir
 
       - name: Build
-        run: make
+        run: meson compile -C builddir
 
       - name: PHP lint and static analysis
         run: |
           composer install --working-dir=php --no-interaction --quiet
-          make lint-php
+          meson test -C builddir --suite lint -v
 
       - name: Unit tests
-        run: make test
+        run: meson test -C builddir --no-suite integration --no-suite lint -v
 
-      - name: Integration test (download + parse)
-        run: make test-integration
-
-      - name: SUPL structural comparison test
-        run: make test-supl
+      - name: Integration tests
+        run: meson test -C builddir --suite integration -v --timeout-multiplier 3

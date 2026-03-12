@@ -24,5 +24,9 @@ asn1/libulp_asn1.*
 # PHP dependencies
 php/vendor/
 
+# Meson build directory
+build/
+builddir/
+
 # SQLite databases
 *.db
