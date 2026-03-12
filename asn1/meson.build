@@ -14,8 +14,9 @@ asn1_warn_args = [
 
 asn1_common_args = ['-DASN_DISABLE_OER_SUPPORT']
 
-lpp_gen_dir = meson.current_source_dir() / 'generated'
-ulp_gen_dir = meson.current_source_dir() / 'generated-ulp'
+# Generate into the build directory, not the source tree
+lpp_gen_dir = meson.current_build_dir() / 'generated'
+ulp_gen_dir = meson.current_build_dir() / 'generated-ulp'
 
 lpp_specs = files('specs' / 'LPP.asn')
 
@@ -29,7 +30,7 @@ endforeach
 # Auto-generate at configure time if directories are missing
 if not fs.is_dir(lpp_gen_dir)
   if not asn1c.found()
-    error('asn1/generated/ not found and asn1c is not available')
+    error('LPP ASN.1 generated sources not found and asn1c is not available')
   endif
   message('Generating LPP ASN.1 sources...')
   run_command('sh', gen_script, lpp_gen_dir,
@@ -39,7 +40,7 @@ endif
 
 if not fs.is_dir(ulp_gen_dir)
   if not asn1c.found()
-    error('asn1/generated-ulp/ not found and asn1c is not available')
+    error('ULP ASN.1 generated sources not found and asn1c is not available')
   endif
   message('Generating ULP ASN.1 sources...')
   run_command('sh', gen_script, ulp_gen_dir, ulp_spec_paths, check : true)
@@ -51,28 +52,30 @@ lpp_sources = run_command('find', lpp_gen_dir, '-maxdepth', '1', '-name', '*.c',
 ulp_sources = run_command('find', ulp_gen_dir, '-maxdepth', '1', '-name', '*.c',
                           check : true).stdout().strip().split('\n')
 
+# Include paths for generated headers (absolute build-dir paths)
+lpp_inc_args = ['-I' + lpp_gen_dir]
+ulp_inc_args = ['-I' + ulp_gen_dir]
+
 liblpp_asn1 = shared_library('lpp_asn1',
   lpp_sources,
-  c_args : asn1_common_args + asn1_warn_args,
-  include_directories : include_directories('generated'),
+  c_args : asn1_common_args + asn1_warn_args + lpp_inc_args,
+  override_options : ['c_std=none'],
 )
 
 libulp_asn1 = shared_library('ulp_asn1',
   ulp_sources,
-  c_args : asn1_common_args + asn1_warn_args,
-  include_directories : include_directories('generated-ulp'),
+  c_args : asn1_common_args + asn1_warn_args + ulp_inc_args,
+  override_options : ['c_std=none'],
 )
 
 dep_lpp_asn1 = declare_dependency(
   link_with : liblpp_asn1,
-  include_directories : include_directories('generated'),
-  compile_args : asn1_common_args,
+  compile_args : asn1_common_args + lpp_inc_args,
 )
 
 dep_ulp_asn1 = declare_dependency(
   link_with : libulp_asn1,
-  include_directories : include_directories('generated-ulp'),
-  compile_args : asn1_common_args,
+  compile_args : asn1_common_args + ulp_inc_args,
 )
 
 # Explicit regeneration target: ninja regenerate-asn1

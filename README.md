@@ -48,9 +48,8 @@ Meson builds all targets whose dependencies are satisfied. If SUPL
 libraries (libevent, OpenSSL) are missing, `rinex_dl` is still built
 but `supl_server` and `supl_client` are skipped.
 
-ASN.1 codec sources (`asn1/generated/`, `asn1/generated-ulp/`) are
-auto-generated at configure time when the directories are missing and
-`asn1c` is installed. To regenerate explicitly:
+ASN.1 codec sources are auto-generated into the build directory at
+configure time when `asn1c` is installed. To regenerate explicitly:
 
 ```sh
 ninja -C builddir regenerate-asn1
@@ -386,9 +385,9 @@ modems for network-assisted GNSS via the LPP protocol.
 ### ASN.1 codec
 
 See the [Build](#supl-server-and-client) section for asn1c installation
-and codec generation. The generated C/H files in `asn1/generated/` and
-`asn1/generated-ulp/` are not committed — they are build artifacts
-regenerated from the ASN.1 specs:
+and codec generation. The generated C/H files are placed in
+`builddir/asn1/generated{,-ulp}/` at configure time from the ASN.1
+specs:
 
 - `asn1/specs/LPP.asn` — 3GPP TS 37.355 Release 16.4 (LPP)
 - `asn1/specs/ulp/*.asn` — OMA SUPL 2.0 (ULP)

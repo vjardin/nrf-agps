@@ -8,9 +8,9 @@
 #
 # This wrapper exists because Meson's run_command() cannot change the
 # working directory, and asn1c writes all output files into the current
-# directory.  The script removes any previous generation, creates the
-# output directory, cd's into it, then exec's asn1c with the project's
-# standard flags.
+# directory.  The script removes any previous output, creates the
+# target directory (typically under the Meson build dir), cd's into it,
+# then exec's asn1c with the project's standard flags.
 #
 # Called from asn1/meson.build:
 #   - at configure time (run_command) when generated dirs are missing
