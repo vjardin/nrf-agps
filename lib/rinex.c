@@ -86,7 +86,21 @@ char *rinex_download(int year, int doy, const char *url_override)
 		return NULL;
 	}
 
-	fprintf(stderr, "Downloaded to: %s\n", path);
+	/* Sanity-check file size: a valid combined BRDC .rnx.gz is
+	 * typically >100 KB; anything under 1 KB is suspicious. */
+	long size = 0;
+	fp = fopen(path, "rb");
+	if (fp) {
+		fseek(fp, 0, SEEK_END);
+		size = ftell(fp);
+		fclose(fp);
+	}
+	if (size < 1024) {
+		fprintf(stderr, "Warning: downloaded file is only %ld bytes"
+			" (expected >100 KB)\n", size);
+	}
+
+	fprintf(stderr, "Downloaded to: %s (%ld bytes)\n", path, size);
 	return path;
 }
 

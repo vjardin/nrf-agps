@@ -310,27 +310,38 @@ static void test_download_and_parse(void)
 	int year = tm->tm_year + 1900;
 	int yday = tm->tm_yday + 1;
 
-	/* Retry up to 3 times with 3-second delays for transient HTTP errors */
+	/*
+	 * Retry up to 3 times with 3-second delays.  BKG may return an
+	 * HTTP error (download fails) or a valid RINEX file that does not
+	 * yet contain enough GPS records (the combined BRDC file is built
+	 * incrementally and may lack GPS data early in the day).
+	 */
+	int rc = -1;
 	for (int attempt = 1; attempt <= 3; attempt++) {
 		path = rinex_download(year, yday, NULL);
-		if (path)
-			break;
-		if (attempt < 3) {
-			fprintf(stderr, "  download attempt %d/3 failed, retrying in 3s...\n",
+		if (path) {
+			memset(&data, 0, sizeof(data));
+			rc = rinex_parse(path, &data);
+			remove(path);
+			free(path);
+			path = NULL;
+			if (rc == 0 && data.num_sv >= 24)
+				break;
+			fprintf(stderr, "  attempt %d/3: got %d GPS SVs"
+				" (need >=24)\n", attempt, data.num_sv);
+		} else {
+			fprintf(stderr, "  attempt %d/3: download failed\n",
 				attempt);
+		}
+		if (attempt < 3) {
+			fprintf(stderr, "  retrying in 3s...\n");
 			sleep(3);
 		}
 	}
-	if (!path) {
-		FAIL("download failed after 3 attempts (network issue?)");
+	if (rc != 0) {
+		FAIL("download/parse failed after 3 attempts");
 		goto out;
 	}
-
-	int rc = rinex_parse(path, &data);
-	remove(path);
-	free(path);
-
-	ASSERT_INT_EQ(rc, 0);
 	ASSERT_TRUE(data.num_sv >= 24);
 	ASSERT_TRUE(data.num_sv <= 32);
 	ASSERT_TRUE(data.gps_week >= 2400);
