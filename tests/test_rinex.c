@@ -310,9 +310,19 @@ static void test_download_and_parse(void)
 	int year = tm->tm_year + 1900;
 	int yday = tm->tm_yday + 1;
 
-	path = rinex_download(year, yday, NULL);
+	/* Retry up to 3 times with 3-second delays for transient HTTP errors */
+	for (int attempt = 1; attempt <= 3; attempt++) {
+		path = rinex_download(year, yday, NULL);
+		if (path)
+			break;
+		if (attempt < 3) {
+			fprintf(stderr, "  download attempt %d/3 failed, retrying in 3s...\n",
+				attempt);
+			sleep(3);
+		}
+	}
 	if (!path) {
-		FAIL("download failed (network issue?)");
+		FAIL("download failed after 3 attempts (network issue?)");
 		goto out;
 	}
 
