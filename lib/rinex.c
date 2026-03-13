@@ -387,6 +387,9 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 	}
 
 	/* --- Data records --- */
+	int cnt_gps = 0, cnt_glo = 0, cnt_gal = 0, cnt_bds = 0;
+	int cnt_qzss = 0, cnt_other = 0;
+
 	while (gzgets(gz, line, sizeof(line))) {
 		size_t len = strlen(line);
 		while (len > 0 && (line[len - 1] == '\n' ||
@@ -411,6 +414,15 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 			is_gps  = (line[0] == 'G');
 			is_qzss = (line[0] == 'J');
 			orbit_line = 0;
+
+			switch (line[0]) {
+			case 'G': cnt_gps++;   break;
+			case 'R': cnt_glo++;   break;
+			case 'E': cnt_gal++;   break;
+			case 'C': cnt_bds++;   break;
+			case 'J': cnt_qzss++;  break;
+			default:  cnt_other++; break;
+			}
 
 			if (is_gps || is_qzss) {
 				memset(&eph, 0, sizeof(eph));
@@ -438,6 +450,13 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 		save_qzss_ephemeris(out, &eph);
 
 	gzclose(gz);
+
+	int total = cnt_gps + cnt_glo + cnt_gal + cnt_bds +
+		    cnt_qzss + cnt_other;
+	pplog_info("Records: %d total (G:%d R:%d E:%d C:%d J:%d other:%d)",
+		   total, cnt_gps, cnt_glo, cnt_gal, cnt_bds,
+		   cnt_qzss, cnt_other);
+
 	if (out->num_qzss)
 		pplog_info("Parsed %d GPS + %d QZSS satellites",
 			   out->num_sv, out->num_qzss);
