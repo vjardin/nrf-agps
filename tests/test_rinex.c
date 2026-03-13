@@ -302,49 +302,68 @@ static void test_download_and_parse(void)
 	struct gps_assist_data data;
 	char *path;
 
-	TEST("integration: download + parse yesterday's BRDC");
-
-	/* Compute yesterday's date */
-	time_t t = time(NULL) - 86400;
-	struct tm *tm = gmtime(&t);
-	int year = tm->tm_year + 1900;
-	int yday = tm->tm_yday + 1;
+	TEST("integration: download + parse recent BRDC");
 
 	/*
-	 * Retry up to 3 times with 3-second delays.  BKG may return an
-	 * HTTP error (download fails) or a valid RINEX file that does not
-	 * yet contain enough GPS records (the combined BRDC file is built
-	 * incrementally and may lack GPS data early in the day).
+	 * Try yesterday first, then day-before-yesterday as fallback.
+	 * BKG's combined BRDC file may temporarily lack GPS records
+	 * (it is built incrementally throughout the day).
 	 */
 	int rc = -1;
-	for (int attempt = 1; attempt <= 3; attempt++) {
-		path = rinex_download(year, yday, NULL);
-		if (path) {
-			memset(&data, 0, sizeof(data));
-			rc = rinex_parse(path, &data);
-			if (rc == 0 && data.num_sv >= 24)
-				break;
-			fprintf(stderr, "  attempt %d/3: got %d GPS SVs"
-				" (need >=24)\n", attempt, data.num_sv);
-			/* Remove intermediate attempts; keep last for debugging */
+	for (int day_offset = 1; day_offset <= 2 && rc != 0; day_offset++) {
+		time_t t = time(NULL) - day_offset * 86400;
+		struct tm *tm = gmtime(&t);
+		int year = tm->tm_year + 1900;
+		int yday = tm->tm_yday + 1;
+
+		fprintf(stderr, "  trying day-%d (DOY %03d)...\n",
+			day_offset, yday);
+
+		for (int attempt = 1; attempt <= 3; attempt++) {
+			path = rinex_download(year, yday, NULL);
+			if (path) {
+				memset(&data, 0, sizeof(data));
+				rc = rinex_parse(path, &data);
+				if (rc == 0 && data.num_sv >= 24)
+					break;
+				fprintf(stderr,
+					"  attempt %d/3: got %d GPS SVs"
+					" (need >=24)\n",
+					attempt, data.num_sv);
+				if (attempt < 3) {
+					remove(path);
+					free(path);
+					path = NULL;
+				}
+			} else {
+				fprintf(stderr,
+					"  attempt %d/3: download failed\n",
+					attempt);
+			}
 			if (attempt < 3) {
+				fprintf(stderr, "  retrying in 3s...\n");
+				sleep(3);
+			}
+		}
+
+		/* Treat "parsed OK but insufficient GPS SVs" as failure
+		 * for the day-fallback logic. */
+		if (rc == 0 && data.num_sv < 24)
+			rc = -1;
+
+		/* If this day failed, clean up before trying next day */
+		if (rc != 0 && day_offset < 2) {
+			if (path) {
 				remove(path);
 				free(path);
 				path = NULL;
 			}
-		} else {
-			fprintf(stderr, "  attempt %d/3: download failed\n",
-				attempt);
-		}
-		if (attempt < 3) {
-			fprintf(stderr, "  retrying in 3s...\n");
-			sleep(3);
 		}
 	}
 	if (rc != 0) {
 		if (path)
 			fprintf(stderr, "  keeping %s for debugging\n", path);
-		FAIL("download/parse failed after 3 attempts");
+		FAIL("download/parse failed after all attempts");
 		goto out;
 	}
 	/* Clean up on success */
