@@ -322,13 +322,16 @@ static void test_download_and_parse(void)
 		if (path) {
 			memset(&data, 0, sizeof(data));
 			rc = rinex_parse(path, &data);
-			remove(path);
-			free(path);
-			path = NULL;
 			if (rc == 0 && data.num_sv >= 24)
 				break;
 			fprintf(stderr, "  attempt %d/3: got %d GPS SVs"
 				" (need >=24)\n", attempt, data.num_sv);
+			/* Remove intermediate attempts; keep last for debugging */
+			if (attempt < 3) {
+				remove(path);
+				free(path);
+				path = NULL;
+			}
 		} else {
 			fprintf(stderr, "  attempt %d/3: download failed\n",
 				attempt);
@@ -339,9 +342,15 @@ static void test_download_and_parse(void)
 		}
 	}
 	if (rc != 0) {
+		if (path)
+			fprintf(stderr, "  keeping %s for debugging\n", path);
 		FAIL("download/parse failed after 3 attempts");
 		goto out;
 	}
+	/* Clean up on success */
+	remove(path);
+	free(path);
+	path = NULL;
 	ASSERT_TRUE(data.num_sv >= 24);
 	ASSERT_TRUE(data.num_sv <= 32);
 	ASSERT_TRUE(data.gps_week >= 2400);
