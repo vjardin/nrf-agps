@@ -55,7 +55,7 @@ jobs:
         run: meson compile -C builddir
 
       - name: Upload build directory
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: builddir
           path: builddir
@@ -74,7 +74,7 @@ jobs:
           sudo apt-get install -y $APT_DEPS
 
       - name: Download build directory
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: builddir
           path: builddir
@@ -111,7 +111,7 @@ jobs:
           sudo apt-get install -y $APT_DEPS
 
       - name: Download build directory
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: builddir
           path: builddir
@@ -181,7 +181,7 @@ jobs:
           sudo apt-get install -y $APT_DEPS
 
       - name: Download build directory
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: builddir
           path: builddir
@@ -190,9 +190,12 @@ jobs:
         run: chmod -R +x builddir
 
       - name: "rinex_dl: integration (BKG download)"
+        id: rinex_integration
         run: meson test -C builddir rinex_integration -v --timeout-multiplier 3
 
       - name: "supl: end-to-end comparison"
+        id: supl_compare
+        if: success() || failure()
         run: meson test -C builddir supl_compare -v --timeout-multiplier 3
 
       - name: Test summary
