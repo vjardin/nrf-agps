@@ -574,9 +574,17 @@ af0 by 1/2<<31 seconds, eccentricity by 1/2<<33, etc.).
 
 ## Tests
 
+Tests are organized by component suite:
+
 ```sh
-# Unit tests (no network required)
+# All unit tests (no network required)
 meson test -C builddir --no-suite integration --no-suite lint -v
+
+# By component suite
+meson test -C builddir --suite rinex_dl -v   # RINEX parser, almanac, SQLite
+meson test -C builddir --suite nrf -v        # nRF ICD conversion, binary cross-check
+meson test -C builddir --suite supl -v       # LPP encoder
+meson test -C builddir --suite php -v        # REST API, nRF Cloud binary
 
 # Integration tests (downloads from BKG IGS)
 meson test -C builddir --suite integration -v

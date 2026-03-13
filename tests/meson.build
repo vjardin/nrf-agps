@@ -11,7 +11,7 @@ test_rinex = executable('test_rinex',
   include_directories : [lib_inc, test_inc],
   dependencies : [dep_curl, dep_sqlite3, dep_zlib, dep_m],
 )
-test('rinex', test_rinex)
+test('rinex', test_rinex, suite : 'rinex_dl')
 
 test_nrf_convert = executable('test_nrf_convert',
   'test_nrf_convert.c',
@@ -19,7 +19,7 @@ test_nrf_convert = executable('test_nrf_convert',
   include_directories : [lib_inc, test_inc],
   dependencies : [dep_m],
 )
-test('nrf_convert', test_nrf_convert)
+test('nrf_convert', test_nrf_convert, suite : 'nrf')
 
 test_almanac = executable('test_almanac',
   'test_almanac.c',
@@ -27,7 +27,7 @@ test_almanac = executable('test_almanac',
   include_directories : [lib_inc, test_inc],
   dependencies : [dep_curl, dep_sqlite3, dep_zlib, dep_m],
 )
-test('almanac', test_almanac)
+test('almanac', test_almanac, suite : 'rinex_dl')
 
 test_sqlitedb = executable('test_sqlitedb',
   'test_sqlitedb.c',
@@ -35,7 +35,7 @@ test_sqlitedb = executable('test_sqlitedb',
   include_directories : [lib_inc, test_inc],
   dependencies : [dep_sqlite3],
 )
-test('sqlitedb', test_sqlitedb)
+test('sqlitedb', test_sqlitedb, suite : 'rinex_dl')
 
 test_nrf_cloud_cross = executable('test_nrf_cloud_cross',
   'test_nrf_cloud_cross.c',
@@ -50,7 +50,7 @@ test_lpp = executable('test_lpp',
   include_directories : [lib_inc, test_inc],
   dependencies : [dep_lpp_asn1, dep_m],
 )
-test('lpp', test_lpp)
+test('lpp', test_lpp, suite : 'supl')
 
 # --- SUPL client ---
 
@@ -75,11 +75,13 @@ if php.found()
   test('php_api', php,
     args : [meson.project_source_root() / 'tests' / 'test_php_api.php'],
     workdir : meson.project_source_root(),
+    suite : 'php',
   )
 
   test('php_nrf_cloud', php,
     args : [meson.project_source_root() / 'tests' / 'test_nrf_cloud.php'],
     workdir : meson.project_source_root(),
+    suite : 'php',
   )
 
   test('nrf_cloud_cross', find_program('sh'),
@@ -92,6 +94,7 @@ if php.found()
     ],
     depends : [test_nrf_cloud_cross],
     workdir : meson.project_source_root(),
+    suite : 'nrf',
   )
 endif
 
@@ -99,7 +102,7 @@ endif
 
 test('rinex_integration', test_rinex,
   args : ['--integration'],
-  suite : 'integration',
+  suite : ['integration', 'rinex_dl'],
   timeout : 120,
 )
 
@@ -117,7 +120,7 @@ if dep_event.found() and dep_openssl.found() and dep_cjson.found()
       ],
       depends : [rinex_dl, supl_server, supl_client],
       is_parallel : false,
-      suite : 'integration',
+      suite : ['integration', 'supl'],
       timeout : 120,
     )
   endif

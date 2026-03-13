@@ -11,8 +11,15 @@ on:
   schedule:
     - cron: '15 6 * * *'   # daily at 06:15 UTC
 
+env:
+  APT_DEPS: >-
+    libcurl4-openssl-dev zlib1g-dev libsqlite3-dev
+    libevent-dev libssl-dev libcjson-dev
+    automake libtool bison flex meson ninja-build
+
 jobs:
-  build-and-test:
+  build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -20,9 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev zlib1g-dev \
-            libsqlite3-dev libevent-dev libssl-dev libcjson-dev \
-            automake libtool bison flex meson ninja-build
+          sudo apt-get install -y $APT_DEPS
 
       - name: Cache asn1c
         id: cache-asn1c
@@ -46,16 +51,171 @@ jobs:
       - name: Configure
         run: meson setup builddir
 
-      - name: Build
+      - name: Compile
         run: meson compile -C builddir
 
-      - name: PHP lint and static analysis
+      - name: Upload build directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: builddir
+          path: builddir
+          retention-days: 1
+
+  lint:
+    name: Lint
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
         run: |
-          composer install --working-dir=php --no-interaction --quiet
-          meson test -C builddir --suite lint -v
+          sudo apt-get update
+          sudo apt-get install -y $APT_DEPS
 
-      - name: Unit tests
-        run: meson test -C builddir --no-suite integration --no-suite lint -v
+      - name: Download build directory
+        uses: actions/download-artifact@v4
+        with:
+          name: builddir
+          path: builddir
 
-      - name: Integration tests
-        run: meson test -C builddir --suite integration -v --timeout-multiplier 3
+      - name: Fix permissions
+        run: chmod -R +x builddir
+
+      - name: Install PHP dependencies
+        run: composer install --working-dir=php --no-interaction --quiet
+
+      - name: PHP lint and static analysis
+        run: meson test -C builddir --suite lint -v
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo '## Lint results' >> "$GITHUB_STEP_SUMMARY"
+          if [ ${{ job.status }} = 'success' ]; then
+            echo ':white_check_mark: All lint checks passed' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo ':x: Lint checks failed' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  unit-tests:
+    name: Unit tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $APT_DEPS
+
+      - name: Download build directory
+        uses: actions/download-artifact@v4
+        with:
+          name: builddir
+          path: builddir
+
+      - name: Fix permissions
+        run: chmod -R +x builddir
+
+      - name: "rinex_dl: rinex parser"
+        run: meson test -C builddir rinex -v --suite rinex_dl --no-suite integration
+
+      - name: "rinex_dl: almanac"
+        run: meson test -C builddir almanac -v --suite rinex_dl
+
+      - name: "rinex_dl: sqlitedb"
+        run: meson test -C builddir sqlitedb -v --suite rinex_dl
+
+      - name: "nrf: ICD conversion"
+        run: meson test -C builddir nrf_convert -v --suite nrf
+
+      - name: "supl: LPP encoder"
+        run: meson test -C builddir lpp -v --suite supl
+
+      - name: "php: REST API"
+        run: meson test -C builddir php_api -v --suite php
+
+      - name: "php: nRF Cloud binary"
+        run: meson test -C builddir php_nrf_cloud -v --suite php
+
+      - name: "nrf: Cloud binary cross-validation"
+        run: meson test -C builddir nrf_cloud_cross -v --suite nrf
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo '## Unit test results' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '| Suite | Test | Status |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|-------|------|--------|' >> "$GITHUB_STEP_SUMMARY"
+          for log in builddir/meson-logs/testlog*.txt; do
+            [ -f "$log" ] || continue
+            while IFS= read -r line; do
+              case "$line" in
+                *" OK "*)
+                  name=$(echo "$line" | sed 's/.*[0-9]\+\/[0-9]\+ \+//' | sed 's/ \+OK .*//')
+                  suite=$(echo "$line" | sed -n 's/.*(\(.*\):.*/\1/p')
+                  echo "| $suite | $name | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
+                  ;;
+                *" FAIL "*)
+                  name=$(echo "$line" | sed 's/.*[0-9]\+\/[0-9]\+ \+//' | sed 's/ \+FAIL .*//')
+                  suite=$(echo "$line" | sed -n 's/.*(\(.*\):.*/\1/p')
+                  echo "| $suite | $name | :x: |" >> "$GITHUB_STEP_SUMMARY"
+                  ;;
+              esac
+            done < "$log"
+          done
+
+  integration-tests:
+    name: Integration tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y $APT_DEPS
+
+      - name: Download build directory
+        uses: actions/download-artifact@v4
+        with:
+          name: builddir
+          path: builddir
+
+      - name: Fix permissions
+        run: chmod -R +x builddir
+
+      - name: "rinex_dl: integration (BKG download)"
+        run: meson test -C builddir rinex_integration -v --timeout-multiplier 3
+
+      - name: "supl: end-to-end comparison"
+        run: meson test -C builddir supl_compare -v --timeout-multiplier 3
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo '## Integration test results' >> "$GITHUB_STEP_SUMMARY"
+          echo '' >> "$GITHUB_STEP_SUMMARY"
+          echo '| Suite | Test | Status |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|-------|------|--------|' >> "$GITHUB_STEP_SUMMARY"
+          for log in builddir/meson-logs/testlog*.txt; do
+            [ -f "$log" ] || continue
+            while IFS= read -r line; do
+              case "$line" in
+                *" OK "*)
+                  name=$(echo "$line" | sed 's/.*[0-9]\+\/[0-9]\+ \+//' | sed 's/ \+OK .*//')
+                  suite=$(echo "$line" | sed -n 's/.*(\(.*\):.*/\1/p')
+                  echo "| $suite | $name | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
+                  ;;
+                *" FAIL "*)
+                  name=$(echo "$line" | sed 's/.*[0-9]\+\/[0-9]\+ \+//' | sed 's/ \+FAIL .*//')
+                  suite=$(echo "$line" | sed -n 's/.*(\(.*\):.*/\1/p')
+                  echo "| $suite | $name | :x: |" >> "$GITHUB_STEP_SUMMARY"
+                  ;;
+              esac
+            done < "$log"
+          done
