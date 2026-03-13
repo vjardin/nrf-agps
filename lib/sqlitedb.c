@@ -4,6 +4,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <string.h>
 #include <sqlite3.h>
@@ -95,7 +96,7 @@ static int create_schema(sqlite3 *db)
 	char *err = NULL;
 
 	if (sqlite3_exec(db, schema_sql, NULL, NULL, &err) != SQLITE_OK) {
-		fprintf(stderr, "SQLite schema error: %s\n", err);
+		warnx("SQLite schema error: %s", err);
 		sqlite3_free(err);
 		return -1;
 	}
@@ -515,8 +516,7 @@ int sqlitedb_read_latest(const char *db_path, struct gps_assist_data *data)
 
 	if (sqlite3_open_v2(db_path, &db, SQLITE_OPEN_READONLY, NULL)
 	    != SQLITE_OK) {
-		fprintf(stderr, "SQLite open error: %s\n",
-			sqlite3_errmsg(db));
+		warnx("SQLite open error: %s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		return -1;
 	}
@@ -547,8 +547,7 @@ int sqlitedb_store(const char *db_path, const struct gps_assist_data *data,
 	int ret = -1;
 
 	if (sqlite3_open(db_path, &db) != SQLITE_OK) {
-		fprintf(stderr, "SQLite open error: %s\n",
-			sqlite3_errmsg(db));
+		warnx("SQLite open error: %s", sqlite3_errmsg(db));
 		sqlite3_close(db);
 		return -1;
 	}
@@ -560,20 +559,20 @@ int sqlitedb_store(const char *db_path, const struct gps_assist_data *data,
 		goto out;
 
 	if (sqlite3_exec(db, "BEGIN", NULL, NULL, &err) != SQLITE_OK) {
-		fprintf(stderr, "SQLite BEGIN error: %s\n", err);
+		warnx("SQLite BEGIN error: %s", err);
 		sqlite3_free(err);
 		goto out;
 	}
 
 	if (insert_metadata(db, data, source_name, &meta_id) != 0) {
-		fprintf(stderr, "SQLite: failed to insert metadata\n");
+		warnx("SQLite: failed to insert metadata");
 		goto rollback;
 	}
 
 	if (data->num_sv > 0) {
 		if (insert_ephemeris(db, meta_id, data->sv,
 				     data->num_sv, "GPS") != 0) {
-			fprintf(stderr, "SQLite: failed to insert GPS ephemeris\n");
+			warnx("SQLite: failed to insert GPS ephemeris");
 			goto rollback;
 		}
 	}
@@ -581,7 +580,7 @@ int sqlitedb_store(const char *db_path, const struct gps_assist_data *data,
 	if (data->num_qzss > 0) {
 		if (insert_ephemeris(db, meta_id, data->qzss,
 				     data->num_qzss, "QZSS") != 0) {
-			fprintf(stderr, "SQLite: failed to insert QZSS ephemeris\n");
+			warnx("SQLite: failed to insert QZSS ephemeris");
 			goto rollback;
 		}
 	}
@@ -589,23 +588,23 @@ int sqlitedb_store(const char *db_path, const struct gps_assist_data *data,
 	if (data->num_alm > 0) {
 		if (insert_almanac(db, meta_id, data->alm,
 				   data->num_alm) != 0) {
-			fprintf(stderr, "SQLite: failed to insert almanac\n");
+			warnx("SQLite: failed to insert almanac");
 			goto rollback;
 		}
 	}
 
 	if (insert_ionosphere(db, meta_id, &data->iono) != 0) {
-		fprintf(stderr, "SQLite: failed to insert ionosphere\n");
+		warnx("SQLite: failed to insert ionosphere");
 		goto rollback;
 	}
 
 	if (insert_utc(db, meta_id, &data->utc) != 0) {
-		fprintf(stderr, "SQLite: failed to insert UTC params\n");
+		warnx("SQLite: failed to insert UTC params");
 		goto rollback;
 	}
 
 	if (sqlite3_exec(db, "COMMIT", NULL, NULL, &err) != SQLITE_OK) {
-		fprintf(stderr, "SQLite COMMIT error: %s\n", err);
+		warnx("SQLite COMMIT error: %s", err);
 		sqlite3_free(err);
 		goto rollback;
 	}

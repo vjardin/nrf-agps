@@ -4,6 +4,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,15 +75,14 @@ int main(int argc, char *argv[])
 	}
 
 	if (!cfg.db_path) {
-		fprintf(stderr, "Error: -d DB_PATH is required\n\n");
+		warnx("-d DB_PATH is required");
 		usage(argv[0]);
 		return 1;
 	}
 
 	if (!cfg.no_tls && (!cfg.cert_file || !cfg.key_file)) {
-		fprintf(stderr,
-			"Error: TLS mode requires both -c CERT and -k KEY\n"
-			"       Use --no-tls for plain TCP mode\n\n");
+		warnx("TLS mode requires both -c CERT and -k KEY\n"
+		      "       Use --no-tls for plain TCP mode");
 		usage(argv[0]);
 		return 1;
 	}

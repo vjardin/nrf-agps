@@ -4,6 +4,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,7 +56,7 @@ char *rinex_download(int year, int doy, const char *url_override)
 
 	fp = fopen(path, "wb");
 	if (!fp) {
-		perror("fopen");
+		warn("%s", path);
 		free(path);
 		return NULL;
 	}
@@ -79,8 +80,7 @@ char *rinex_download(int year, int doy, const char *url_override)
 	fclose(fp);
 
 	if (res != CURLE_OK) {
-		fprintf(stderr, "Download failed: %s\n",
-			curl_easy_strerror(res));
+		warnx("download failed: %s", curl_easy_strerror(res));
 		remove(path);
 		free(path);
 		return NULL;
@@ -95,10 +95,9 @@ char *rinex_download(int year, int doy, const char *url_override)
 		size = ftell(fp);
 		fclose(fp);
 	}
-	if (size < 1024) {
-		fprintf(stderr, "Warning: downloaded file is only %ld bytes"
-			" (expected >100 KB)\n", size);
-	}
+	if (size < 1024)
+		warnx("downloaded file is only %ld bytes"
+		      " (expected >100 KB)", size);
 
 	fprintf(stderr, "Downloaded to: %s (%ld bytes)\n", path, size);
 	return path;
@@ -343,7 +342,7 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 
 	gz = gzopen(path, "rb");
 	if (!gz) {
-		fprintf(stderr, "Cannot open: %s\n", path);
+		warn("%s", path);
 		return -1;
 	}
 
@@ -366,9 +365,8 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 		if (strstr(label, "RINEX VERSION")) {
 			double ver = strtod(line, NULL);
 			if (ver < 3.0) {
-				fprintf(stderr,
-					"RINEX v%.0f not supported (need 3+)\n",
-					ver);
+				warnx("RINEX v%.0f not supported"
+				      " (need 3+)", ver);
 				gzclose(gz);
 				return -1;
 			}
@@ -382,7 +380,7 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 	}
 
 	if (in_header) {
-		fprintf(stderr, "Unexpected end of file in header\n");
+		warnx("unexpected end of file in header");
 		gzclose(gz);
 		return -1;
 	}

@@ -4,6 +4,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -73,7 +74,7 @@ int codegen_write(const char *prefix, const struct gps_assist_data *data,
 
 	fp = fopen(path, "w");
 	if (!fp) {
-		perror("fopen");
+		warn("%s", path);
 		return -1;
 	}
 

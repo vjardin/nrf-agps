@@ -7,6 +7,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,7 +54,7 @@ int almanac_parse_sem(const char *path, struct gps_assist_data *data)
 
 	fp = fopen(path, "r");
 	if (!fp) {
-		perror("fopen");
+		warn("%s", path);
 		return -1;
 	}
 
@@ -199,7 +200,7 @@ int almanac_parse_yuma(const char *path, struct gps_assist_data *data)
 
 	fp = fopen(path, "r");
 	if (!fp) {
-		perror("fopen");
+		warn("%s", path);
 		return -1;
 	}
 
@@ -300,7 +301,7 @@ int almanac_download_sem(struct gps_assist_data *data)
 
 	fp = fopen(TMP_SEM_PATH, "wb");
 	if (!fp) {
-		perror("fopen");
+		warn("%s", TMP_SEM_PATH);
 		return -1;
 	}
 
@@ -324,8 +325,7 @@ int almanac_download_sem(struct gps_assist_data *data)
 	fclose(fp);
 
 	if (res != CURLE_OK) {
-		fprintf(stderr, "SEM download failed: %s\n",
-			curl_easy_strerror(res));
+		warnx("SEM download failed: %s", curl_easy_strerror(res));
 		remove(TMP_SEM_PATH);
 		return -1;
 	}

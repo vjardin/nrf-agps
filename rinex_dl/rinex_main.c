@@ -4,6 +4,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,30 +71,20 @@ int main(int argc, char **argv)
 			break;
 		case 'd':
 			if (sscanf(optarg, "%d-%d-%d",
-				   &year, &month, &day) != 3) {
-				fprintf(stderr, "Bad date format: %s\n",
-					optarg);
-				return 1;
-			}
+				   &year, &month, &day) != 3)
+				errx(1, "bad date format: %s", optarg);
 			if (month < 1 || month > 12 ||
-			    day < 1 || day > 31) {
-				fprintf(stderr, "Invalid date: %s\n", optarg);
-				return 1;
-			}
+			    day < 1 || day > 31)
+				errx(1, "invalid date: %s", optarg);
 			break;
 		case 'l':
 			if (sscanf(optarg, "%lf,%lf",
-				   &ref_lat, &ref_lon) != 2) {
-				fprintf(stderr, "Bad location format: %s "
-					"(expected LAT,LON)\n", optarg);
-				return 1;
-			}
+				   &ref_lat, &ref_lon) != 2)
+				errx(1, "bad location format: %s"
+				     " (expected LAT,LON)", optarg);
 			if (ref_lat < -90 || ref_lat > 90 ||
-			    ref_lon < -180 || ref_lon > 180) {
-				fprintf(stderr, "Invalid coordinates: %s\n",
-					optarg);
-				return 1;
-			}
+			    ref_lon < -180 || ref_lon > 180)
+				errx(1, "invalid coordinates: %s", optarg);
 			break;
 		case 'o':
 			output = optarg;
@@ -143,7 +134,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!path) {
-		fprintf(stderr, "Failed to obtain RINEX file\n");
+		warnx("failed to obtain RINEX file");
 		curl_global_cleanup();
 		return 1;
 	}
@@ -152,7 +143,7 @@ int main(int argc, char **argv)
 	struct gps_assist_data data;
 
 	if (rinex_parse(path, &data) != 0) {
-		fprintf(stderr, "Failed to parse RINEX file\n");
+		warnx("failed to parse RINEX file");
 		if (!local_file)
 			remove(path);
 		free(path);
@@ -161,7 +152,7 @@ int main(int argc, char **argv)
 	}
 
 	if (data.num_sv == 0) {
-		fprintf(stderr, "No GPS satellites found in file\n");
+		warnx("no GPS satellites found in file");
 		if (!local_file)
 			remove(path);
 		free(path);
@@ -186,13 +177,12 @@ int main(int argc, char **argv)
 		} else if (strncmp(alm_mode, "yuma:", 5) == 0) {
 			alm_err = almanac_parse_yuma(alm_mode + 5, &data);
 		} else {
-			fprintf(stderr, "Unknown almanac mode: %s\n",
-				alm_mode);
+			warnx("unknown almanac mode: %s", alm_mode);
 			usage(argv[0]);
 			alm_err = -1;
 		}
 		if (alm_err) {
-			fprintf(stderr, "Failed to load almanac\n");
+			warnx("failed to load almanac");
 			if (!local_file)
 				remove(path);
 			free(path);
@@ -212,7 +202,7 @@ int main(int argc, char **argv)
 		out_err = codegen_write(output, &data, source);
 
 	if (out_err) {
-		fprintf(stderr, "Failed to generate output\n");
+		warnx("failed to generate output");
 		if (!local_file)
 			remove(path);
 		free(path);

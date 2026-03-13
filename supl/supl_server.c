@@ -8,6 +8,7 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+#include <err.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
@@ -137,7 +138,7 @@ static void handle_supl_start(struct bufferevent *bev,
 				sess->set_id_buf, sess->set_id_len,
 				sess->set_id_type,
 				&resp_buf, &resp_len) != 0) {
-		fprintf(stderr, "  Failed to build SUPL RESPONSE\n");
+		warnx("failed to build SUPL RESPONSE");
 		bufferevent_free(bev);
 		return;
 	}
@@ -165,8 +166,7 @@ static void handle_supl_pos_init(struct bufferevent *bev,
 	struct gps_assist_data data;
 
 	if (sqlitedb_read_latest(sess->cfg->db_path, &data) != 0) {
-		fprintf(stderr, "  Failed to read database: %s\n",
-			sess->cfg->db_path);
+		warnx("failed to read database: %s", sess->cfg->db_path);
 		bufferevent_free(bev);
 		return;
 	}
@@ -180,7 +180,7 @@ static void handle_supl_pos_init(struct bufferevent *bev,
 	size_t lpp_len = 0;
 
 	if (lpp_build_assistance_data(&data, &lpp_buf, &lpp_len) != 0) {
-		fprintf(stderr, "  Failed to build LPP message\n");
+		warnx("failed to build LPP message");
 		bufferevent_free(bev);
 		return;
 	}
@@ -198,7 +198,7 @@ static void handle_supl_pos_init(struct bufferevent *bev,
 			   sess->set_id_type,
 			   lpp_buf, lpp_len,
 			   &pos_buf, &pos_len) != 0) {
-		fprintf(stderr, "  Failed to build SUPL POS\n");
+		warnx("failed to build SUPL POS");
 		free(lpp_buf);
 		bufferevent_free(bev);
 		return;
@@ -220,7 +220,7 @@ static void handle_supl_pos_init(struct bufferevent *bev,
 			   sess->set_id_buf, sess->set_id_len,
 			   sess->set_id_type,
 			   &end_buf, &end_len) != 0) {
-		fprintf(stderr, "  Failed to build SUPL END\n");
+		warnx("failed to build SUPL END");
 		bufferevent_free(bev);
 		return;
 	}
@@ -256,8 +256,7 @@ static void read_cb(struct bufferevent *bev, void *ctx)
 		size_t pdu_len = ((size_t)hdr[0] << 8) | hdr[1];
 
 		if (pdu_len < 2 || pdu_len > MAX_ULP_SIZE) {
-			fprintf(stderr, "  Invalid ULP length: %zu\n",
-				pdu_len);
+			warnx("invalid ULP length: %zu", pdu_len);
 			bufferevent_free(bev);
 			return;
 		}
@@ -278,7 +277,7 @@ static void read_cb(struct bufferevent *bev, void *ctx)
 
 		free(buf);
 		if (!pdu) {
-			fprintf(stderr, "  Failed to decode ULP PDU\n");
+			warnx("failed to decode ULP PDU");
 			bufferevent_free(bev);
 			return;
 		}
@@ -290,9 +289,8 @@ static void read_cb(struct bufferevent *bev, void *ctx)
 			if (sess->state == STATE_WAIT_START) {
 				handle_supl_start(bev, pdu, sess);
 			} else {
-				fprintf(stderr,
-					"  Unexpected SUPL START in state %d\n",
-					sess->state);
+				warnx("unexpected SUPL START in state %d",
+				      sess->state);
 				supl_pdu_free(pdu);
 				bufferevent_free(bev);
 				return;
@@ -303,9 +301,8 @@ static void read_cb(struct bufferevent *bev, void *ctx)
 			if (sess->state == STATE_WAIT_POS_INIT) {
 				handle_supl_pos_init(bev, pdu, sess);
 			} else {
-				fprintf(stderr,
-					"  Unexpected SUPL POS INIT in state %d\n",
-					sess->state);
+				warnx("unexpected SUPL POS INIT in state %d",
+				      sess->state);
 				supl_pdu_free(pdu);
 				bufferevent_free(bev);
 				return;
@@ -320,8 +317,7 @@ static void read_cb(struct bufferevent *bev, void *ctx)
 			return;
 
 		default:
-			fprintf(stderr, "  Unhandled ULP message type: %d\n",
-				msg_type);
+			warnx("unhandled ULP message type: %d", msg_type);
 			supl_pdu_free(pdu);
 			bufferevent_free(bev);
 			return;
@@ -405,8 +401,7 @@ static void accept_error_cb(struct evconnlistener *listener, void *ctx)
 	(void)ctx;
 	int err = EVUTIL_SOCKET_ERROR();
 
-	fprintf(stderr, "Accept error: %s\n",
-		evutil_socket_error_to_string(err));
+	warnx("accept error: %s", evutil_socket_error_to_string(err));
 	event_base_loopexit(evconnlistener_get_base(listener), NULL);
 }
 
@@ -481,13 +476,12 @@ static void signal_cb(evutil_socket_t sig, short events, void *arg)
 int supl_server_run(const struct supl_server_config *cfg)
 {
 	if (!cfg->db_path) {
-		fprintf(stderr, "Error: database path required (-d)\n");
+		warnx("database path required (-d)");
 		return -1;
 	}
 
 	if (!cfg->no_tls && !cfg->cert_file) {
-		fprintf(stderr, "Error: TLS certificate required (-c/-k) "
-			"or use --no-tls\n");
+		warnx("TLS certificate required (-c/-k) or use --no-tls");
 		return -1;
 	}
 
@@ -505,8 +499,7 @@ int supl_server_run(const struct supl_server_config *cfg)
 	struct gps_assist_data test_data;
 
 	if (sqlitedb_read_latest(cfg->db_path, &test_data) != 0) {
-		fprintf(stderr, "Error: cannot read database: %s\n",
-			cfg->db_path);
+		warnx("cannot read database: %s", cfg->db_path);
 		return -1;
 	}
 	fprintf(stderr, "Database: %d GPS + %d QZSS SVs, week %d\n",
@@ -519,14 +512,14 @@ int supl_server_run(const struct supl_server_config *cfg)
 
 		g_ssl_ctx = SSL_CTX_new(TLS_server_method());
 		if (!g_ssl_ctx) {
-			fprintf(stderr, "SSL_CTX_new failed\n");
+			warnx("SSL_CTX_new failed");
 			return -1;
 		}
 
 		if (SSL_CTX_use_certificate_chain_file(g_ssl_ctx,
 						       cfg->cert_file) != 1) {
-			fprintf(stderr, "Failed to load certificate: %s\n",
-				cfg->cert_file);
+			warnx("failed to load certificate: %s",
+			      cfg->cert_file);
 			ERR_print_errors_fp(stderr);
 			SSL_CTX_free(g_ssl_ctx);
 			return -1;
@@ -534,15 +527,15 @@ int supl_server_run(const struct supl_server_config *cfg)
 
 		if (SSL_CTX_use_PrivateKey_file(g_ssl_ctx, cfg->key_file,
 						SSL_FILETYPE_PEM) != 1) {
-			fprintf(stderr, "Failed to load private key: %s\n",
-				cfg->key_file);
+			warnx("failed to load private key: %s",
+			      cfg->key_file);
 			ERR_print_errors_fp(stderr);
 			SSL_CTX_free(g_ssl_ctx);
 			return -1;
 		}
 
 		if (!SSL_CTX_check_private_key(g_ssl_ctx)) {
-			fprintf(stderr, "Certificate/key mismatch\n");
+			warnx("certificate/key mismatch");
 			SSL_CTX_free(g_ssl_ctx);
 			return -1;
 		}
@@ -551,7 +544,7 @@ int supl_server_run(const struct supl_server_config *cfg)
 	struct event_base *base = event_base_new();
 
 	if (!base) {
-		fprintf(stderr, "event_base_new failed\n");
+		warnx("event_base_new failed");
 		return -1;
 	}
 	g_base = base;
@@ -571,8 +564,7 @@ int supl_server_run(const struct supl_server_config *cfg)
 		(struct sockaddr *)&sin, sizeof(sin));
 
 	if (!listener) {
-		fprintf(stderr, "Cannot bind to %s:%d: %s\n",
-			bind_addr, port, strerror(errno));
+		warn("cannot bind to %s:%d", bind_addr, port);
 		event_base_free(base);
 		return -1;
 	}
