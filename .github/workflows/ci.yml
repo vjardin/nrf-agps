@@ -198,6 +198,15 @@ jobs:
         if: success() || failure()
         run: meson test -C builddir supl_compare -v --timeout-multiplier 3
 
+      - name: Upload downloaded RINEX files
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: rinex-downloads
+          path: /tmp/brdc_*.rnx.gz
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Test summary
         if: always()
         run: |
