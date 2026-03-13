@@ -16,6 +16,7 @@
 #include "rinex.h"
 #include "codegen.h"
 #include "almanac.h"
+#include "pplog.h"
 #include "sqlitedb.h"
 
 static int day_of_year(int year, int month, int day)
@@ -128,13 +129,13 @@ int main(int argc, char **argv)
 	if (local_file) {
 		path = strdup(local_file);
 	} else {
-		fprintf(stderr, "Fetching BRDC data for %04d-%02d-%02d "
-			"(DOY %03d)\n", year, month, day, doy);
+		pplog_info("Fetching BRDC data for %04d-%02d-%02d"
+			  " (DOY %03d)", year, month, day, doy);
 		path = rinex_download(year, doy, url);
 	}
 
 	if (!path) {
-		warnx("failed to obtain RINEX file");
+		pplog_err("failed to obtain RINEX file");
 		curl_global_cleanup();
 		return 1;
 	}
@@ -143,7 +144,7 @@ int main(int argc, char **argv)
 	struct gps_assist_data data;
 
 	if (rinex_parse(path, &data) != 0) {
-		warnx("failed to parse RINEX file");
+		pplog_err("failed to parse RINEX file");
 		if (!local_file)
 			remove(path);
 		free(path);
@@ -152,7 +153,7 @@ int main(int argc, char **argv)
 	}
 
 	if (data.num_sv == 0) {
-		warnx("no GPS satellites found in file");
+		pplog_err("no GPS satellites found in file");
 		if (!local_file)
 			remove(path);
 		free(path);
@@ -177,12 +178,12 @@ int main(int argc, char **argv)
 		} else if (strncmp(alm_mode, "yuma:", 5) == 0) {
 			alm_err = almanac_parse_yuma(alm_mode + 5, &data);
 		} else {
-			warnx("unknown almanac mode: %s", alm_mode);
+			pplog_err("unknown almanac mode: %s", alm_mode);
 			usage(argv[0]);
 			alm_err = -1;
 		}
 		if (alm_err) {
-			warnx("failed to load almanac");
+			pplog_err("failed to load almanac");
 			if (!local_file)
 				remove(path);
 			free(path);
@@ -202,7 +203,7 @@ int main(int argc, char **argv)
 		out_err = codegen_write(output, &data, source);
 
 	if (out_err) {
-		warnx("failed to generate output");
+		pplog_err("failed to generate output");
 		if (!local_file)
 			remove(path);
 		free(path);
@@ -210,10 +211,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	fprintf(stderr, "Done: %d GPS", data.num_sv);
 	if (data.num_qzss)
-		fprintf(stderr, " + %d QZSS", data.num_qzss);
-	fprintf(stderr, " satellites, GPS week %u\n", data.gps_week);
+		pplog_info("Done: %d GPS + %d QZSS satellites, GPS week %u",
+			   data.num_sv, data.num_qzss, data.gps_week);
+	else
+		pplog_info("Done: %d GPS satellites, GPS week %u",
+			   data.num_sv, data.gps_week);
 
 	if (!local_file)
 		remove(path);

@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "codegen.h"
+#include "pplog.h"
 
 static void emit_almanac(FILE *fp, const struct gps_almanac *alm)
 {
@@ -156,6 +157,6 @@ int codegen_write(const char *prefix, const struct gps_assist_data *data,
 	fprintf(fp, "};\n");
 
 	fclose(fp);
-	fprintf(stderr, "Generated: %s\n", path);
+	pplog_info("Generated: %s", path);
 	return 0;
 }

@@ -8,13 +8,13 @@
  * Copyright (C) 2026 Free Mobile
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-#include <err.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "lpp_builder.h"
+#include "pplog.h"
 
 #include "LPP-Message.h"
 #include "LPP-MessageBody.h"
@@ -547,7 +547,7 @@ int lpp_build_assistance_data(const struct gps_assist_data *data,
 
 	if (asn_check_constraints(&asn_DEF_LPP_Message, msg,
 				  errbuf, &errlen) != 0) {
-		warnx("LPP constraint error: %s", errbuf);
+		pplog_err("LPP constraint error: %s", errbuf);
 		goto cleanup;
 	}
 

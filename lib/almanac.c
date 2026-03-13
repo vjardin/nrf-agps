@@ -14,6 +14,7 @@
 #include <curl/curl.h>
 
 #include "almanac.h"
+#include "pplog.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -157,7 +158,7 @@ int almanac_parse_sem(const char *path, struct gps_assist_data *data)
 	}
 
 	fclose(fp);
-	fprintf(stderr, "Parsed %d almanac entries (SEM)\n", data->num_alm);
+	pplog_info("Parsed %d almanac entries (SEM)", data->num_alm);
 	return 0;
 }
 
@@ -289,7 +290,7 @@ int almanac_parse_yuma(const char *path, struct gps_assist_data *data)
 	}
 
 	fclose(fp);
-	fprintf(stderr, "Parsed %d almanac entries (YUMA)\n", data->num_alm);
+	pplog_info("Parsed %d almanac entries (YUMA)", data->num_alm);
 	return 0;
 }
 
@@ -311,7 +312,7 @@ int almanac_download_sem(struct gps_assist_data *data)
 		return -1;
 	}
 
-	fprintf(stderr, "Downloading SEM almanac: %s\n", ALMANAC_SEM_URL);
+	pplog_info("Downloading SEM almanac: %s", ALMANAC_SEM_URL);
 
 	curl_easy_setopt(curl, CURLOPT_URL, ALMANAC_SEM_URL);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
@@ -325,7 +326,7 @@ int almanac_download_sem(struct gps_assist_data *data)
 	fclose(fp);
 
 	if (res != CURLE_OK) {
-		warnx("SEM download failed: %s", curl_easy_strerror(res));
+		pplog_err("SEM download failed: %s", curl_easy_strerror(res));
 		remove(TMP_SEM_PATH);
 		return -1;
 	}

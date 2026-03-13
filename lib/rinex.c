@@ -13,6 +13,7 @@
 #include <curl/curl.h>
 #include <zlib.h>
 
+#include "pplog.h"
 #include "rinex.h"
 
 /* BKG IGS BRDC combined navigation file (no authentication required) */
@@ -52,7 +53,7 @@ char *rinex_download(int year, int doy, const char *url_override)
 		snprintf(url, sizeof(url), BRDC_URL_FMT,
 			 year, doy, year, doy);
 
-	fprintf(stderr, "Downloading: %s\n", url);
+	pplog_info("Downloading: %s", url);
 
 	fp = fopen(path, "wb");
 	if (!fp) {
@@ -80,7 +81,7 @@ char *rinex_download(int year, int doy, const char *url_override)
 	fclose(fp);
 
 	if (res != CURLE_OK) {
-		warnx("download failed: %s", curl_easy_strerror(res));
+		pplog_err("download failed: %s", curl_easy_strerror(res));
 		remove(path);
 		free(path);
 		return NULL;
@@ -96,10 +97,10 @@ char *rinex_download(int year, int doy, const char *url_override)
 		fclose(fp);
 	}
 	if (size < 1024)
-		warnx("downloaded file is only %ld bytes"
-		      " (expected >100 KB)", size);
+		pplog_warn("downloaded file is only %ld bytes"
+			   " (expected >100 KB)", size);
 
-	fprintf(stderr, "Downloaded to: %s (%ld bytes)\n", path, size);
+	pplog_info("Downloaded to: %s (%ld bytes)", path, size);
 	return path;
 }
 
@@ -365,8 +366,8 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 		if (strstr(label, "RINEX VERSION")) {
 			double ver = strtod(line, NULL);
 			if (ver < 3.0) {
-				warnx("RINEX v%.0f not supported"
-				      " (need 3+)", ver);
+				pplog_err("RINEX v%.0f not supported"
+					  " (need 3+)", ver);
 				gzclose(gz);
 				return -1;
 			}
@@ -380,7 +381,7 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 	}
 
 	if (in_header) {
-		warnx("unexpected end of file in header");
+		pplog_err("unexpected end of file in header");
 		gzclose(gz);
 		return -1;
 	}
@@ -437,9 +438,10 @@ int rinex_parse(const char *path, struct gps_assist_data *out)
 		save_qzss_ephemeris(out, &eph);
 
 	gzclose(gz);
-	fprintf(stderr, "Parsed %d GPS", out->num_sv);
 	if (out->num_qzss)
-		fprintf(stderr, " + %d QZSS", out->num_qzss);
-	fprintf(stderr, " satellites\n");
+		pplog_info("Parsed %d GPS + %d QZSS satellites",
+			   out->num_sv, out->num_qzss);
+	else
+		pplog_info("Parsed %d GPS satellites", out->num_sv);
 	return 0;
 }
