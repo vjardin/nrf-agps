@@ -449,10 +449,11 @@ In practice, this represents a city-level position hint. The confidence
 level is set to 68% (approximately 1$\sigma$), meaning the true position
 falls within the uncertainty ellipse with 68% probability.
 
-For a reference location error of $\delta r$ meters, the impact on
-Doppler prediction is approximately:
+For a reference location error of $\delta r$ meters, the worst-case
+impact on Doppler prediction is (when the position error maximally
+perturbs the line-of-sight direction in the velocity plane):
 
-$$\delta f_d \approx \frac{v_{\text{sat}} \cdot \delta r}{R_{\text{sat}} \cdot \lambda_{L1}}$$
+$$\delta f_d \leq \frac{v_{\text{sat}} \cdot \delta r}{R_{\text{sat}} \cdot \lambda_{L1}}$$
 
 where $v_{\text{sat}} = \sqrt{\mu/R} \approx 3{,}874$ m/s is the orbital
 velocity (derived in the Acquisition section),
@@ -651,8 +652,13 @@ navigation message. The search space per satellite is:
 
 $$N_{\text{warm}} = 2046 \times 6 = 12{,}276 \text{ bins}$$
 
-The acquisition per satellite is fast ($12{,}276 \times 0.001 / 0.5 \approx 25$ s), but the receiver must still collect subframes 1--3
-from the navigation message for fresh ephemeris:
+A single-channel serial search would need $12{,}276 \times 0.001 / 0.5
+\approx 25$ s per satellite. However, the nRF9151 searches multiple code
+phases and satellites in parallel using hardware correlator channels, so
+the effective acquisition time across 8--12 visible SVs is approximately
+1--3 s (consistent with Nordic Semiconductor's documented warm-start
+performance [5]). The receiver must still collect subframes 1--3 from the
+navigation message for fresh ephemeris:
 
 $$T_{\text{warm}} \approx T_{\text{acq,warm}} + T_{\text{nav}} \approx 1\text{--}3 + 18\text{--}30 = 19\text{--}33 \text{ s}$$
 
@@ -677,10 +683,12 @@ nominal fit interval) and accurate time:
 - **No navigation data decoding needed**: the injected ephemeris
   eliminates the 18+ second subframe collection time. This is the single
   largest TTFF reduction.
-- **Code-phase search unchanged**: code phase repeats every 1 ms
-  ($\approx$ 300 km), so only sub-microsecond time knowledge (not
-  available in this scenario) would narrow the 2046-bin code-phase
-  search. The full code-phase sweep remains, but at only 1--2 frequency
+- **Code-phase search unchanged**: without reference location (see
+  scenario definition table), the receiver cannot predict the
+  satellite-receiver range. Code phase repeats every 1 ms
+  ($\approx$ 300 km), so only sub-microsecond time knowledge or
+  known position (neither available in this scenario) would narrow
+  the 2046-bin code-phase search. The full code-phase sweep remains, but at only 1--2 frequency
   bins per code bin the total search is much smaller.
 
 $$N_{\text{hot}} \approx 2046 \times 2 = 4{,}092 \text{ bins}$$
